@@ -25,16 +25,18 @@ class Account:
     """
     Class representing an exchange account with API credentials.
     """
-    def __init__(self, name: str, api_key: str, api_secret: str):
+    def __init__(self, name: str, exchange: str, api_key: str, api_secret: str):
         """
         Initialize an account object.
         
         Args:
             name: Account name
+            exchange: Exchange name (e.g., Binance, Coinbase)
             api_key: Exchange API key
             api_secret: Exchange API secret
         """
         self.name = name
+        self.exchange = exchange
         self.api_key = api_key
         self.api_secret = api_secret
     
@@ -42,12 +44,13 @@ class Account:
         """String representation with masked credentials."""
         masked_key = f"{self.api_key[:5]}..." if self.api_key else "None"
         masked_secret = f"{self.api_secret[:5]}..." if self.api_secret else "None"
-        return f"Account(name='{self.name}', api_key='{masked_key}', api_secret='{masked_secret}')"
+        return f"Account(name='{self.name}', exchange='{self.exchange}', api_key='{masked_key}', api_secret='{masked_secret}')"
     
     def to_dict(self) -> Dict[str, str]:
         """Convert account to dictionary format."""
         return {
             'name': self.name,
+            'exchange': self.exchange,
             'api_key': self.api_key,
             'api_secret': self.api_secret
         }
@@ -57,6 +60,7 @@ class Account:
         """Create an Account instance from a dictionary."""
         return cls(
             name=data.get('name', ''),
+            exchange=data.get('exchange', ''),
             api_key=data.get('api_key', ''),
             api_secret=data.get('api_secret', '')
         )
@@ -173,69 +177,3 @@ class ConfigManager:
         if not self._loaded:
             self.load()
         return self._config
-
-
-# For backwards compatibility with the functional API
-def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Load the configuration from a YAML file (backwards compatibility function).
-    
-    Args:
-        config_path: Path to the configuration file. If None, uses the default path.
-        
-    Returns:
-        Dictionary containing the configuration.
-        
-    Raises:
-        ConfigError: If the configuration file cannot be loaded or parsed.
-    """
-    return ConfigManager(config_path).load().get_raw_config()
-
-def get_account_credentials(config: Union[Dict[str, Any], ConfigManager], api_name: str) -> Dict[str, str]:
-    """
-    Get the API credentials for a specific account (backwards compatibility function).
-    
-    Args:
-        config: Configuration dictionary or ConfigManager instance.
-        api_name: Name of the API to get credentials for.
-        
-    Returns:
-        Dictionary containing 'api_key' and 'api_secret'.
-        
-    Raises:
-        ConfigError: If the account is not found in the configuration.
-    """
-    if isinstance(config, ConfigManager):
-        return config.get_account_credentials(api_name)
-    
-    # For backwards compatibility with dictionary-based config
-    config_manager = ConfigManager()
-    config_manager._config = config
-    config_manager._loaded = True
-    
-    # Parse accounts if they haven't been parsed yet
-    if not config_manager._accounts and 'accounts' in config:
-        for account_data in config['accounts']:
-            config_manager._accounts.append(Account.from_dict(account_data))
-    
-    return config_manager.get_account_credentials(api_name)
-
-def list_accounts(config: Union[Dict[str, Any], ConfigManager]) -> List[str]:
-    """
-    List all account names (backwards compatibility function).
-    
-    Args:
-        config: Configuration dictionary or ConfigManager instance.
-        
-    Returns:
-        List of account names.
-    """
-    if isinstance(config, ConfigManager):
-        return config.list_account_names()
-    
-    # For backwards compatibility with dictionary-based config
-    config_manager = ConfigManager()
-    config_manager._config = config
-    config_manager._loaded = True
-    
-    return config_manager.list_account_names()

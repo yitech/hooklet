@@ -13,16 +13,18 @@ class TestAccount:
     
     def test_init(self):
         """Test Account initialization."""
-        account = Account(name="test_account", api_key="test_key", api_secret="test_secret")
+        account = Account(name="test_account", exchange="binance", api_key="test_key", api_secret="test_secret")
         assert account.name == "test_account"
+        assert account.exchange == "binance"
         assert account.api_key == "test_key"
         assert account.api_secret == "test_secret"
     
     def test_string_representation(self):
         """Test string representation with masked credentials."""
-        account = Account(name="test_account", api_key="test_key", api_secret="test_secret")
+        account = Account(name="test_account", exchange="binance", api_key="test_key", api_secret="test_secret")
         str_repr = str(account)
         assert "test_account" in str_repr
+        assert "binance" in str_repr
         assert "test_" in str_repr
         assert "..." in str_repr
         assert "test_key" not in str_repr  # Full key should not be visible
@@ -30,10 +32,11 @@ class TestAccount:
     
     def test_to_dict(self):
         """Test conversion to dictionary."""
-        account = Account(name="test_account", api_key="test_key", api_secret="test_secret")
+        account = Account(name="test_account", exchange="binance", api_key="test_key", api_secret="test_secret")
         data = account.to_dict()
         assert data == {
             'name': 'test_account',
+            'exchange': 'binance',
             'api_key': 'test_key',
             'api_secret': 'test_secret'
         }
@@ -42,11 +45,13 @@ class TestAccount:
         """Test creation from dictionary."""
         data = {
             'name': 'test_account',
+            'exchange': 'binance',
             'api_key': 'test_key',
             'api_secret': 'test_secret'
         }
         account = Account.from_dict(data)
         assert account.name == "test_account"
+        assert account.exchange == "binance"
         assert account.api_key == "test_key"
         assert account.api_secret == "test_secret"
     
@@ -55,6 +60,7 @@ class TestAccount:
         data = {'name': 'test_account'}
         account = Account.from_dict(data)
         assert account.name == "test_account"
+        assert account.exchange == ""
         assert account.api_key == ""
         assert account.api_secret == ""
 
@@ -68,9 +74,11 @@ class TestConfigManager:
         config_content = """
 accounts:
   - name: "test_account1"
+    exchange: "binance"
     api_key: "key1"
     api_secret: "secret1"
   - name: "test_account2"
+    exchange: "coinbase"
     api_key: "key2"
     api_secret: "secret2"
 """
@@ -114,6 +122,7 @@ accounts:
         cm = ConfigManager(config_path=sample_config).load()
         account = cm.get_account("test_account1")
         assert account.name == "test_account1"
+        assert account.exchange == "binance"
         assert account.api_key == "key1"
         assert account.api_secret == "secret1"
     
