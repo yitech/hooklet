@@ -15,8 +15,6 @@ from typing import Dict, Any, Optional, Callable, List, Awaitable, Union
 from nats.aio.client import Client as NATS
 from nats.aio.subscription import Subscription
 
-from ems.config import ConfigManager
-
 logger = logging.getLogger(__name__)
 
 # Type for async message handler functions
@@ -34,16 +32,14 @@ class NatsManager:
     4. Publish messages to subjects
     """
     
-    def __init__(self, nats_url: Optional[str] = None, config_manager: Optional[ConfigManager] = None):
+    def __init__(self, nats_url: Optional[str] = None):
         """
         Initialize the NATS manager.
         
         Args:
             nats_url: URL of the NATS server. If None, uses environment variable or default.
-            config_manager: ConfigManager instance. If None, creates a new one.
         """
         self.nats_url = nats_url or os.environ.get("NATS_URL", "nats://localhost:4222")
-        self.config_manager = config_manager or ConfigManager().load()
         self.nc = NATS()
         self._connected = False
         self._subscriptions: Dict[str, Dict[str, Subscription]] = {}  # {subject: {handler_id: subscription}}

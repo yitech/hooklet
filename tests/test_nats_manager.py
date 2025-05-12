@@ -35,18 +35,7 @@ class TestNatsManager:
             mock_nats_class.return_value = mock_nc
             yield mock_nc
     
-    @pytest_asyncio.fixture
-    async def mock_config_manager(self):
-        """Fixture that mocks the ConfigManager."""
-        with patch('ems.nats_manager.ConfigManager') as mock_cm_class:
-            mock_cm = MagicMock()
-            mock_cm.load.return_value = mock_cm
-            
-            # Return the mock config manager
-            mock_cm_class.return_value = mock_cm
-            yield mock_cm
-    
-    async def test_init(self, mock_nats, mock_config_manager):
+    async def test_init(self, mock_nats):
         """Test NatsManager initialization."""
         nm = NatsManager(nats_url="nats://test-server:4222")
         assert nm.nats_url == "nats://test-server:4222"
@@ -55,7 +44,7 @@ class TestNatsManager:
         assert nm._handlers == {}
     
     @pytest.mark.asyncio
-    async def test_connect(self, mock_nats, mock_config_manager):
+    async def test_connect(self, mock_nats):
         """Test connecting to NATS."""
         nm = NatsManager()
         await nm.connect()
@@ -64,7 +53,7 @@ class TestNatsManager:
         assert nm._connected is True
     
     @pytest.mark.asyncio
-    async def test_close(self, mock_nats, mock_config_manager):
+    async def test_close(self, mock_nats):
         """Test closing NATS connection."""
         nm = NatsManager()
         await nm.connect()
@@ -76,7 +65,7 @@ class TestNatsManager:
         assert nm._handlers == {}
     
     @pytest.mark.asyncio
-    async def test_register_handler(self, mock_nats, mock_config_manager):
+    async def test_register_handler(self, mock_nats):
         """Test registering a handler function."""
         nm = NatsManager()
         await nm.connect()
@@ -99,7 +88,7 @@ class TestNatsManager:
         assert nm._handlers["test.subject"][handler_id] == test_handler
     
     @pytest.mark.asyncio
-    async def test_register_handler_with_custom_id(self, mock_nats, mock_config_manager):
+    async def test_register_handler_with_custom_id(self, mock_nats):
         """Test registering a handler with a custom ID."""
         nm = NatsManager()
         await nm.connect()
@@ -117,7 +106,7 @@ class TestNatsManager:
         assert nm._handlers["test.subject"]["custom_id"] == test_handler
     
     @pytest.mark.asyncio
-    async def test_register_duplicate_handler_id(self, mock_nats, mock_config_manager):
+    async def test_register_duplicate_handler_id(self, mock_nats):
         """Test registering a handler with a duplicate ID."""
         nm = NatsManager()
         await nm.connect()
@@ -137,7 +126,7 @@ class TestNatsManager:
             await nm.register_handler("test.subject", test_handler2, handler_id="same_id")
     
     @pytest.mark.asyncio
-    async def test_unregister_handler(self, mock_nats, mock_config_manager):
+    async def test_unregister_handler(self, mock_nats):
         """Test unregistering a handler."""
         nm = NatsManager()
         await nm.connect()
@@ -159,7 +148,7 @@ class TestNatsManager:
         assert "test.subject" not in nm._handlers
     
     @pytest.mark.asyncio
-    async def test_unregister_nonexistent_handler(self, mock_nats, mock_config_manager):
+    async def test_unregister_nonexistent_handler(self, mock_nats):
         """Test unregistering a non-existent handler."""
         nm = NatsManager()
         await nm.connect()
@@ -171,7 +160,7 @@ class TestNatsManager:
         assert success is False
     
     @pytest.mark.asyncio
-    async def test_publish(self, mock_nats, mock_config_manager):
+    async def test_publish(self, mock_nats):
         """Test publishing a message."""
         nm = NatsManager()
         await nm.connect()
@@ -185,7 +174,7 @@ class TestNatsManager:
         # Check that publish was called with the correct arguments
         mock_nats.publish.assert_called_once_with("test.subject", json.dumps(test_data).encode())
     
-    def test_get_registered_handlers(self, mock_nats, mock_config_manager):
+    def test_get_registered_handlers(self, mock_nats):
         """Test getting registered handlers."""
         nm = NatsManager()
         nm._handlers = {
