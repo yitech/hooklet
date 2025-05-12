@@ -10,48 +10,40 @@ from typing import Dict, Any
 from ems import NatsManager
 from ems.strategy import Strategy
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, 
+                   format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class SimpleMAStrategy(Strategy):
     """
     A simple Moving Average crossover strategy example.
-    
-    This strategy subscribes to market data and implements a basic
-    moving average crossover strategy for demonstration purposes.
     """
     
     def __init__(self, nats_manager: NatsManager, symbol: str = "BTC/USDT"):
-        """
-        Initialize the strategy.
-        
-        Args:
-            nats_manager: The NATS manager instance
-            symbol: The trading pair symbol to trade
-        """
-        super().__init__(nats_manager, strategy_id=f"MA_{symbol}")
+        """Initialize the strategy."""
+        # Use a NATS-safe subject format (replace '/' with '.')
+        # safe_symbol = symbol.replace("/", ".")
+        safe_symbol = symbol
+        super().__init__(nats_manager, strategy_id=f"MA_{safe_symbol}")
         self.symbol = symbol
+        self.safe_symbol = safe_symbol
         self.prices: list[float] = []
         self.ma_period = 20
+        logger.info(f"Initializing strategy for {symbol} (subject: market.price.{safe_symbol})")
     
     def get_handlers(self) -> Dict[str, Any]:
-        """
-        Define the message handlers for this strategy.
-        
-        Returns:
-            Dictionary mapping subjects to handler functions
-        """
+        """Define the message handlers for this strategy."""
+        # Use the safe symbol format for the subject
         return {
-            f"market.price.{self.symbol}": self.handle_price_update,
+            # f"market.price.{self.safe_symbol}": self.handle_price_update,
+            f"market.price.{self.symbol}": self.handle_price_update,  # Try both formats
             "ems.orders.filled": self.handle_order_filled
         }
     
     async def handle_price_update(self, data: Dict[str, Any]) -> None:
-        """
-        Handle incoming price updates.
-        
-        Args:
-            data: Price update data containing bid/ask prices
-        """
+        """Handle incoming price updates."""
+        logger.info(f"Price update received for {self.symbol}: {data}")
         if "price" in data:
             price = float(data["price"])
             self.prices.append(price)
