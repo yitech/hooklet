@@ -7,13 +7,15 @@ from .config import (
     ConfigManager, 
     Account, 
     ConfigError,
-
 )
+
+from .nats_manager import NatsManager
 
 __all__ = [
     'ConfigManager',
     'Account',
     'ConfigError',
+    'NatsManager',
 ]
 
 __version__ = '0.1.0'
