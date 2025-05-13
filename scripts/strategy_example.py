@@ -38,7 +38,7 @@ class SimpleMAStrategy(Strategy):
         return {
             # f"market.price.{self.safe_symbol}": self.handle_price_update,
             f"market.price.{self.symbol}": self.handle_price_update,  # Try both formats
-            "ems.orders.filled": self.handle_order_filled
+            "ems.orders.filled": self.handle_order_filled,
         }
     
     async def handle_price_update(self, data: Dict[str, Any]) -> None:
@@ -106,6 +106,15 @@ class SimpleMAStrategy(Strategy):
         }
         await self.publish("ems.orders.new", order_data)
         logger.info(f"Sell signal generated at {price}")
+
+    async def consider_orderbook(self, data: Dict[str, Any]) -> None:
+        """
+        Process order book data.
+        
+        Args:
+            data: Order book data
+        """
+        logger.info(f"Order book update for {self.symbol}: {data}")
     
     async def on_start(self) -> None:
         """
