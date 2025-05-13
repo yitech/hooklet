@@ -39,4 +39,10 @@ async def main():
         await client.close_connection()
         logger.info("Connection closed")
 
-asyncio.run(main())
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user. Shutting down...")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
