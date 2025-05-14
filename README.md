@@ -63,6 +63,30 @@ cp config.example.yml config.yml
 docker-compose up -d
 ```
 
+### Code Style and Linting
+
+The project uses several linters and formatters to maintain code quality:
+
+- **Black**: Code formatter with line length of 100
+- **isort**: Import sorting
+- **flake8**: Style guide enforcement
+- **pylint**: Static code analysis
+- **mypy**: Optional static type checking
+
+To run all linters on the `ems` directory:
+
+```bash
+# Run the linting script
+./scripts/lint.sh
+
+# Or run individual linters
+black ./ems
+isort ./ems
+flake8 ./ems
+pylint ./ems
+mypy ./ems
+```
+
 ### Running a Sample Strategy
 
 ```bash
