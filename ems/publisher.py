@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 """
 Publisher module for the EMS (Exchange Management System).
-
-This module provides base classes for data publishers that can be extended to
-create various types of data publishers for market data, user data, etc.
 """
 
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from .nats_manager import NatsManager
 
@@ -24,7 +21,7 @@ class Publisher(ABC):
     that can publish data to NATS subjects.
     """
     
-    def __init__(self, subject: str, nats_manager: Optional[NatsManager] = None):
+    def __init__(self, nats_manager: NatsManager):
         """
         Initialize the publisher.
         
@@ -32,9 +29,8 @@ class Publisher(ABC):
             subject: The NATS subject to publish to
             nats_manager: Optional instance of NatsManager. If None, a new one will be created.
         """
-        self.subject = subject
-        self._nats_manager = nats_manager or NatsManager()
-        self._running = False
+        self._nats_manager = nats_manager
+        self._running: bool = False
         
     async def start(self) -> None:
         """
@@ -42,6 +38,8 @@ class Publisher(ABC):
         
         Connects to NATS if not already connected and begins publishing data.
         """
+        logger.info(f"Starting publisher for {self.subject}")
+        
         if not self._nats_manager._connected:
             await self._nats_manager.connect()
             
@@ -66,25 +64,27 @@ class Publisher(ABC):
         await self._nats_manager.close()
         logger.info(f"Publisher for {self.subject} closed.")
     
-    async def publish(self, data: Any) -> None:
+    async def publish(self, subject: str, data: Any) -> None:
         """
         Publish data to the configured subject.
         
         Args:
             data: The data to publish (will be JSON encoded)
         """
-        await self._nats_manager.publish(self.subject, data)
-        logger.debug(f"Published data to {self.subject}")
+        await self._nats_manager.publish(subject, data)
+        logger.debug(f"Published data to {subject}")
     
-    @abstractmethod
     async def _run_publisher(self) -> None:
         """
         Main publisher loop.
         
         This method must be implemented by subclasses to define the
         specific publishing behavior.
+        
+        Raises:
+            NotImplementedError: If not implemented by subclass
         """
-        pass
+        raise NotImplementedError("Publishers must implement _run_publisher()")
 
 
 class IntervalPublisher(Publisher):
@@ -94,7 +94,7 @@ class IntervalPublisher(Publisher):
     This class is useful for simulated data or periodic updates.
     """
     
-    def __init__(self, subject: str, interval_seconds: float = 1.0, nats_manager: Optional[NatsManager] = None):
+    def __init__(self, subject: str, nats_manager: NatsManager, interval_seconds: float):
         """
         Initialize the interval publisher.
         
@@ -123,7 +123,6 @@ class IntervalPublisher(Publisher):
             logger.error(f"Error in IntervalPublisher for {self.subject}: {str(e)}")
             raise
     
-    @abstractmethod
     async def get_data(self) -> Any:
         """
         Get the data to publish.
@@ -133,8 +132,11 @@ class IntervalPublisher(Publisher):
         
         Returns:
             The data to publish or None if no data should be published this time
+            
+        Raises:
+            NotImplementedError: If not implemented by subclass
         """
-        pass
+        raise NotImplementedError("IntervalPublishers must implement get_data()")
     
     def on_publish(self, data: Any) -> None:
         """
@@ -145,7 +147,7 @@ class IntervalPublisher(Publisher):
         Args:
             data: The data that was published
         """
-        logger.info(f"Published: {data} to {self.subject}")
+        logger.debug(f"Published: {data} to {self.subject}")
 
 
 class StreamPublisher(Publisher):
@@ -174,7 +176,6 @@ class StreamPublisher(Publisher):
         finally:
             await self.disconnect_from_stream(stream)
     
-    @abstractmethod
     async def connect_to_stream(self) -> Any:
         """
         Connect to the data stream.
@@ -184,10 +185,12 @@ class StreamPublisher(Publisher):
         
         Returns:
             Stream object or connection that will be passed to get_stream_data
+            
+        Raises:
+            NotImplementedError: If not implemented by subclass
         """
-        pass
+        raise NotImplementedError("StreamPublishers must implement connect_to_stream()")
     
-    @abstractmethod
     async def get_stream_data(self, stream: Any) -> Any:
         """
         Get data from the stream.
@@ -200,8 +203,11 @@ class StreamPublisher(Publisher):
             
         Returns:
             The data to publish or None if no data should be published
+            
+        Raises:
+            NotImplementedError: If not implemented by subclass
         """
-        pass
+        raise NotImplementedError("StreamPublishers must implement get_stream_data()")
     
     async def disconnect_from_stream(self, stream: Any) -> None:
         """

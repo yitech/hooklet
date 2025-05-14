@@ -31,9 +31,10 @@ class Strategy(ABC):
             nats_manager: Instance of NatsManager for handling NATS communications
             strategy_id: Optional unique identifier for this strategy instance
         """
-        self.nats_manager = nats_manager
+        self._nats_manager = nats_manager
         self.strategy_id = strategy_id or self.__class__.__name__
         self._registered_handlers: Dict[str, List[str]] = {}
+        self._running = False
     
     async def start(self) -> None:
         """
@@ -43,6 +44,11 @@ class Strategy(ABC):
         It ensures the strategy is connected to NATS and registers all handlers.
         """
         logger.info(f"Starting strategy: {self.strategy_id}")
+        
+        if not self._nats_manager._connected:
+            await self._nats_manager.connect()
+            
+        self._running = True
         await self._register_handlers()
         await self.on_start()
     
@@ -54,40 +60,58 @@ class Strategy(ABC):
         It unregisters all handlers and performs cleanup.
         """
         logger.info(f"Stopping strategy: {self.strategy_id}")
+        self._running = False
         await self._unregister_handlers()
         await self.on_stop()
+    
+    async def close(self) -> None:
+        """
+        Close the NATS connection.
+        
+        Should be called when done with the strategy.
+        """
+        await self._nats_manager.close()
+        logger.info(f"Strategy {self.strategy_id} closed.")
     
     async def _register_handlers(self) -> None:
         """
         Register all handlers defined in get_handlers().
         """
-        handlers = self.get_handlers()
-        for subject, handler in handlers.items():
-            handler_id = f"{self.strategy_id}_{subject}"
-            try:
-                await self.nats_manager.register_handler(subject, handler, handler_id)
-                if subject not in self._registered_handlers:
-                    self._registered_handlers[subject] = []
-                self._registered_handlers[subject].append(handler_id)
-                logger.debug(f"Registered handler for {subject} with ID {handler_id}")
-            except Exception as e:
-                logger.error(f"Failed to register handler for {subject}: {str(e)}")
+        try:
+            handlers = self.get_handlers()
+            for subject, handler in handlers.items():
+                handler_id = f"{self.strategy_id}_{subject}"
+                try:
+                    await self._nats_manager.register_handler(subject, handler, handler_id)
+                    if subject not in self._registered_handlers:
+                        self._registered_handlers[subject] = []
+                    self._registered_handlers[subject].append(handler_id)
+                    logger.debug(f"Registered handler for {subject} with ID {handler_id}")
+                except Exception as e:
+                    logger.error(f"Failed to register handler for {subject}: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error in strategy {self.strategy_id}: {str(e)}")
+            raise
     
     async def _unregister_handlers(self) -> None:
         """
         Unregister all handlers that were registered by this strategy.
         """
-        for subject, handler_ids in self._registered_handlers.items():
-            for handler_id in handler_ids:
-                try:
-                    success = await self.nats_manager.unregister_handler(subject, handler_id)
-                    if success:
-                        logger.debug(f"Unregistered handler {handler_id} from {subject}")
-                    else:
-                        logger.warning(f"Failed to unregister handler {handler_id} from {subject}")
-                except Exception as e:
-                    logger.error(f"Error unregistering handler {handler_id}: {str(e)}")
-        self._registered_handlers.clear()
+        try:
+            for subject, handler_ids in self._registered_handlers.items():
+                for handler_id in handler_ids:
+                    try:
+                        success = await self._nats_manager.unregister_handler(subject, handler_id)
+                        if success:
+                            logger.debug(f"Unregistered handler {handler_id} from {subject}")
+                        else:
+                            logger.warning(f"Failed to unregister handler {handler_id} from {subject}")
+                    except Exception as e:
+                        logger.error(f"Error unregistering handler {handler_id}: {str(e)}")
+            self._registered_handlers.clear()
+        except Exception as e:
+            logger.error(f"Error in strategy {self.strategy_id}: {str(e)}")
+            raise
     
     async def publish(self, subject: str, data: Any) -> None:
         """
@@ -97,7 +121,8 @@ class Strategy(ABC):
             subject: The NATS subject to publish to
             data: The data to publish (will be JSON encoded)
         """
-        await self.nats_manager.publish(subject, data)
+        await self._nats_manager.publish(subject, data)
+        logger.debug(f"Published data to {subject}")
     
     @abstractmethod
     def get_handlers(self) -> Dict[str, Any]:
