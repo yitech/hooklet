@@ -55,15 +55,6 @@ class Publisher(ABC):
         self._running = False
         logger.info(f"Publisher for {self.subject} stopping...")
     
-    async def close(self) -> None:
-        """
-        Close the NATS connection.
-        
-        Should be called when done with the publisher.
-        """
-        await self._nats_manager.close()
-        logger.info(f"Publisher for {self.subject} closed.")
-    
     async def publish(self, subject: str, data: Any) -> None:
         """
         Publish data to the configured subject.
@@ -94,7 +85,7 @@ class IntervalPublisher(Publisher):
     This class is useful for simulated data or periodic updates.
     """
     
-    def __init__(self, subject: str, nats_manager: NatsManager, interval_seconds: float):
+    def __init__(self, nats_manager: NatsManager, interval_seconds: float):
         """
         Initialize the interval publisher.
         
@@ -103,7 +94,7 @@ class IntervalPublisher(Publisher):
             interval_seconds: Time between publications in seconds
             nats_manager: Optional instance of NatsManager
         """
-        super().__init__(subject, nats_manager)
+        super().__init__(nats_manager)
         self.interval_seconds = interval_seconds
     
     async def _run_publisher(self) -> None:

@@ -63,15 +63,7 @@ class Strategy(ABC):
         self._running = False
         await self._unregister_handlers()
         await self.on_stop()
-    
-    async def close(self) -> None:
-        """
-        Close the NATS connection.
-        
-        Should be called when done with the strategy.
-        """
-        await self._nats_manager.close()
-        logger.info(f"Strategy {self.strategy_id} closed.")
+
     
     async def _register_handlers(self) -> None:
         """

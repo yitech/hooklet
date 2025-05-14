@@ -13,8 +13,6 @@ from .nats_manager import NatsManager
 from .strategy import Strategy
 from .publisher import Publisher, IntervalPublisher, StreamPublisher
 
-# Import publishers from the publishers package
-from .publishers import MarketPricePublisher, BinanceUserDataPublisher
 
 __all__ = [
     'ConfigManager',
@@ -24,9 +22,7 @@ __all__ = [
     'Strategy',
     'Publisher',
     'IntervalPublisher',
-    'StreamPublisher',
-    'MarketPricePublisher',
-    'BinanceUserDataPublisher',
+    'StreamPublisher'
 ]
 
 __version__ = '0.1.0'
