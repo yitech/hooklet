@@ -1,12 +1,14 @@
-from abc import ABC, abstractmethod
-import logging
 import asyncio
-from typing import Any
-import uuid
+import logging
 import time
+import uuid
+from abc import ABC, abstractmethod
+from typing import Any
+
 from ems.nats_manager import NatsManager
 
 logger = logging.getLogger(__name__)
+
 
 class EventExecutor(ABC):
     """
@@ -38,12 +40,12 @@ class EventExecutor(ABC):
     async def start(self) -> None:
         logger.info(f"Starting executor with ID {self._executor_id}")
 
-        if not self._nats_manager.is_connected():
-            await self._nats_manager.connect()
+        if not self.nats_manager.is_connected():
+            await self.nats_manager.connect()
 
         self._stop_event.clear()  # clear the stop event to start the executor
         await self.on_start()
-        
+
         try:
             await self._run_executor()
         except Exception as e:
@@ -71,19 +73,19 @@ class EventExecutor(ABC):
         """
         logger.info(f"Stopping executor with ID {self._executor_id}")
         self._stop_event.set()
-    
+
     async def publish(self, subject: str, data: Any) -> None:
         """
         Publish data to the configured subject.
-        
+
         Args:
             subject: The NATS subject to publish to
             data: The data to publish (will be JSON encoded)
         """
-        if not self._nats_manager.is_connected():
-            await self._nats_manager.connect()
-        
-        await self._nats_manager.publish(subject, data)
+        if not self.nats_manager.is_connected():
+            await self.nats_manager.connect()
+
+        await self.nats_manager.publish(subject, data)
 
     @abstractmethod
     async def on_execute(self) -> None:
@@ -91,17 +93,17 @@ class EventExecutor(ABC):
         Subclass should override this method to implement execution logic.
         """
         raise NotImplementedError("Subclasses must implement on_execute()")
-    
+
     @abstractmethod
     async def on_start(self) -> None:
         """Optional startup hook."""
         raise NotImplementedError("Subclasses must implement on_start()")
-    
+
     @abstractmethod
     async def on_finish(self) -> None:
         """finish hook."""
         raise NotImplementedError("Subclasses must implement on_finish()")
-    
+
     async def on_error(self, exception: Exception) -> None:
         """OPTIONAL: Override to handle execution errors."""
         pass

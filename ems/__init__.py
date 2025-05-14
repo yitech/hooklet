@@ -4,22 +4,19 @@ EMS (Exchange Management System) - A tool for managing cryptocurrency exchange o
 """
 
 from .config import (
-    ConfigManager, 
-    Account, 
+    Account,
     ConfigError,
+    ConfigManager,
 )
-
-from .nats_manager import NatsManager
 from .core import EventExecutor
-
+from .nats_manager import NatsManager
 
 __all__ = [
-    'ConfigManager',
-    'Account',
-    'ConfigError',
-    'NatsManager',
-    'EventExecutor',
-
+    "ConfigManager",
+    "Account",
+    "ConfigError",
+    "NatsManager",
+    "EventExecutor",
 ]
 
-__version__ = '0.1.0'
+__version__ = "0.1.0"

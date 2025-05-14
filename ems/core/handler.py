@@ -1,10 +1,13 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import Any
-import logging
-from .executor import EventExecutor
+
 from ems.nats_manager import NatsManager
 
+from .executor import EventExecutor
+
 logger = logging.getLogger(__name__)
+
 
 class EventHandler(EventExecutor, ABC):
     """
@@ -15,7 +18,7 @@ class EventHandler(EventExecutor, ABC):
     def __init__(self, nats_manager: NatsManager, executor_id: None | str = None):
         super().__init__(nats_manager, executor_id)
         self._registered_handlers: dict[str, list[str]] = {}
-    
+
     async def on_start(self) -> None:
         await self._register_handlers()
 
@@ -46,9 +49,9 @@ class EventHandler(EventExecutor, ABC):
                 except Exception as e:
                     logger.error(f"Failed to register handler for {subject}: {str(e)}")
         except Exception as e:
-            logger.error(f"Error in strategy {self.strategy_id}: {str(e)}")
+            logger.error(f"Error in handler {self.executor_id}: {str(e)}")
             raise
-    
+
     async def _unregister_handlers(self) -> None:
         """
         Unregister all handlers that were registered by this strategy.
@@ -61,7 +64,9 @@ class EventHandler(EventExecutor, ABC):
                         if success:
                             logger.debug(f"Unregistered handler {handler_id} from {subject}")
                         else:
-                            logger.warning(f"Failed to unregister handler {handler_id} from {subject}")
+                            logger.warning(
+                                f"Failed to unregister handler {handler_id} from {subject}"
+                            )
                     except Exception as e:
                         logger.error(f"Error unregistering handler {handler_id}: {str(e)}")
             self._registered_handlers.clear()
@@ -69,17 +74,15 @@ class EventHandler(EventExecutor, ABC):
             logger.error(f"Error in strategy {self.executor_id}: {str(e)}")
             raise
 
-    
-
     @abstractmethod
     def get_handlers(self) -> dict[str, Any]:
         """
         Get the mapping of subjects to handler functions.
-        
+
         This method must be implemented by subclasses to define which
         NATS subjects they want to subscribe to and what handler functions
         should be called when messages are received.
-        
+
         Returns:
             Dictionary mapping subject strings to handler functions
         """

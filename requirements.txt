@@ -5,3 +5,16 @@ pytest>=7.0.0
 pytest-asyncio>=0.18.3
 nats-py>=2.3.1
 python-binance
+
+# For REST API
+fastapi>=0.95.0
+uvicorn[standard]>=0.21.0
+pydantic>=1.10.0
+
+# Linters and formatters
+flake8>=6.0.0
+pylint>=3.0.0
+black>=23.0.0
+isort>=5.12.0
+mypy>=1.0.0
+types-PyYAML>=6.0.12

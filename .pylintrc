@@ -1,0 +1,27 @@
+[MASTER]
+ignore=CVS,__pycache__,.git,venv,dist,build
+
+[MESSAGES CONTROL]
+disable=
+    C0103, # variable-name (snake_case naming style)
+    C0111, # missing-docstring
+    C0330, # bad-continuation
+    C1801, # len-as-condition
+    R0903, # too-few-public-methods
+    R0913, # too-many-arguments
+    W0212, # protected-access
+    W0621, # redefined-outer-name
+    W1203, # logging-fstring-interpolation
+
+[FORMAT]
+max-line-length=100
+
+[DESIGN]
+max-args=6
+max-attributes=12
+
+[SIMILARITIES]
+min-similarity-lines=8
+ignore-comments=yes
+ignore-docstrings=yes
+ignore-imports=yes
