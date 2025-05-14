@@ -10,8 +10,7 @@ from .config import (
 )
 
 from .nats_manager import NatsManager
-from .strategy import Strategy
-from .publisher import Publisher, IntervalPublisher, StreamPublisher
+from .core import EventExecutor
 
 
 __all__ = [
@@ -19,10 +18,8 @@ __all__ = [
     'Account',
     'ConfigError',
     'NatsManager',
-    'Strategy',
-    'Publisher',
-    'IntervalPublisher',
-    'StreamPublisher'
+    'EventExecutor',
+
 ]
 
 __version__ = '0.1.0'

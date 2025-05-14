@@ -65,6 +65,15 @@ class NatsManager:
             logger.error(f"Failed to connect to NATS: {str(e)}")
             raise
     
+    def is_connected(self) -> bool:
+        """
+        Check if the NATS connection is established.
+        
+        Returns:
+            True if connected, False otherwise.
+        """
+        return self._connected
+    
     async def close(self) -> None:
         """
         Close the connection to the NATS server.
