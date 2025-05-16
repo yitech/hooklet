@@ -1,13 +1,14 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Awaitable, Callable
 import asyncio
 from ems.nats_manager import NatsManager
 
 from .executor import EventExecutor
 
-logger = logging.getLogger(__name__)
+HandlerFunc = Callable[[Any], Awaitable[Any]]
 
+logger = logging.getLogger(__name__)
 
 class EventHandler(EventExecutor, ABC):
     """
@@ -84,7 +85,7 @@ class EventHandler(EventExecutor, ABC):
             raise
 
     @abstractmethod
-    def get_handlers(self) -> dict[str, Any]:
+    def get_handlers(self) -> dict[str, HandlerFunc]:
         """
         Get the mapping of subjects to handler functions.
 
