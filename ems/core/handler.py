@@ -1,7 +1,8 @@
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Awaitable, Callable
-import asyncio
+
 from ems.nats_manager import NatsManager
 
 from .executor import EventExecutor
@@ -10,13 +11,14 @@ HandlerFunc = Callable[[Any], Awaitable[Any]]
 
 logger = logging.getLogger(__name__)
 
+
 class EventHandler(EventExecutor, ABC):
     """
     Base class for event handlers.
     This abstract class provides the structure for handling events.
     """
 
-    def __init__(self, nats_manager: NatsManager, executor_id: None | str = None):
+    def __init__(self, nats_manager: NatsManager | None = None, executor_id: None | str = None):
         super().__init__(nats_manager, executor_id)
         self._registered_handlers: dict[str, list[str]] = {}
         self._shutdown_event = asyncio.Event()
@@ -97,4 +99,3 @@ class EventHandler(EventExecutor, ABC):
         except Exception as e:
             logger.error(f"Error in strategy {self.executor_id}: {str(e)}")
             raise
-

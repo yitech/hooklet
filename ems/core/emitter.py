@@ -1,8 +1,7 @@
 import asyncio
 import logging
-import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Callable, AsyncIterator
+from typing import Any, AsyncIterator, Callable, List
 
 from ems.nats_manager import NatsManager
 
@@ -19,7 +18,7 @@ class EventEmitter(EventExecutor, ABC):
     This abstract class provides the structure for emitting events.
     """
 
-    def __init__(self, nats_manager: NatsManager, executor_id: None | str = None):
+    def __init__(self, nats_manager: NatsManager | None = None, executor_id: None | str = None):
         super().__init__(nats_manager, executor_id)
         self._generator_tasks: List[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
@@ -53,10 +52,11 @@ class EventEmitter(EventExecutor, ABC):
         to its corresponding subject.
         """
         try:
-            generators = self.get_generators()
+            generators = await self.get_generators()
             self._generator_tasks = []
 
             for subject, generator in generators.items():
+
                 async def run_generator(subject=subject, generator=generator):
                     try:
                         async for data in generator():
@@ -73,7 +73,7 @@ class EventEmitter(EventExecutor, ABC):
         except Exception as e:
             logger.error(f"Failed to start generators in {self.executor_id}: {str(e)}")
             raise
-    
+
     async def _unregister_generators(self) -> None:
         """
         Cancel all running generator tasks.
@@ -92,8 +92,6 @@ class EventEmitter(EventExecutor, ABC):
         """
         await self._register_generators()
         await self._shutdown_event.wait()
-        
-
 
     async def on_stop(self) -> None:
         """
@@ -101,7 +99,3 @@ class EventEmitter(EventExecutor, ABC):
         It can be overridden by subclasses to implement custom behavior.
         """
         self._shutdown_event.set()
-
-    
-
-    

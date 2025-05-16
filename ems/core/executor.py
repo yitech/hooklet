@@ -1,5 +1,6 @@
 import datetime
 import logging
+import os
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -16,7 +17,10 @@ class EventExecutor(ABC):
     This abstract class provides the structure for event-driven execution.
     """
 
-    def __init__(self, nats_manager: NatsManager, executor_id: None | str = None):
+    def __init__(self, nats_manager: NatsManager | None = None, executor_id: None | str = None):
+        if nats_manager is None:
+            nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
+            nats_manager = NatsManager(nats_url=nats_url)
         self.nats_manager = nats_manager
         self._executor_id = executor_id or uuid.uuid4().hex
 
@@ -75,7 +79,7 @@ class EventExecutor(ABC):
         This method sets the stop event and allows the executor to finish its current task.
         """
         logger.info(f"Stopping executor with ID {self._executor_id}")
-        self._stop_event.set()
+        await self.on_stop()
 
     async def publish(self, subject: str, data: Any) -> None:
         """
