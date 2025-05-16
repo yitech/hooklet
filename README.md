@@ -4,7 +4,7 @@ An asynchronous, event-driven Python framework for developing applications with 
 
 ## Installation
 
-### From PyPI (Coming Soon)
+### From PyPI
 
 ```bash
 pip install natsio
