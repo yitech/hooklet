@@ -2,16 +2,15 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
-
-import ccxt.pro
-from ccxt.base.errors import ExchangeNotAvailable, NetworkError
+from typing import Any, Dict, List, Optional, Callable, AsyncIterator
 
 from ems.nats_manager import NatsManager
 
 from .executor import EventExecutor
 
 logger = logging.getLogger(__name__)
+
+GeneratorFunc = Callable[[], AsyncIterator[dict[str, Any]]]
 
 
 class EventEmitter(EventExecutor, ABC):
@@ -22,11 +21,14 @@ class EventEmitter(EventExecutor, ABC):
 
     def __init__(self, nats_manager: NatsManager, executor_id: None | str = None):
         super().__init__(nats_manager, executor_id)
+        self._generator_tasks: List[asyncio.Task] = []
+        self._shutdown_event = asyncio.Event()
 
     async def on_start(self) -> None:
         """
         Called when the emitter starts. Override to add specific initialization.
         """
+        self._shutdown_event.clear()
         logger.info(f"Starting emitter {self.executor_id}")
 
     async def on_finish(self) -> None:
@@ -35,211 +37,68 @@ class EventEmitter(EventExecutor, ABC):
         """
         logger.info(f"Stopping emitter {self.executor_id}")
 
-    async def emit_event(self, subject: str, data: Any) -> None:
+    async def _register_generators(self) -> None:
         """
-        Emit an event by publishing to the NATS subject.
+        Launch generator coroutines that produce data and publish to NATS.
 
-        Args:
-            subject: The NATS subject to publish to
-            data: The data to publish (will be JSON encoded)
+        Each generator is an async iterable that yields messages to be published
+        to its corresponding subject.
         """
         try:
-            await self.publish(subject, data)
-            logger.debug(f"Emitted event to {subject}: {data}")
+            generators = self.get_generators()
+            self._generator_tasks = []
+
+            for subject, generator in generators.items():
+                async def run_generator(subject=subject, generator=generator):
+                    try:
+                        async for data in generator():
+                            await self.nats_manager.publish(subject, data)
+                    except asyncio.CancelledError:
+                        logger.info(f"Generator for subject '{subject}' was cancelled.")
+                    except Exception as e:
+                        logger.exception(f"Error in generator for subject '{subject}': {str(e)}")
+
+                task = asyncio.create_task(run_generator())
+                self._generator_tasks.append(task)
+                logger.debug(f"Launched generator task for subject '{subject}'")
+
         except Exception as e:
-            logger.error(f"Failed to emit event to {subject}: {str(e)}")
+            logger.error(f"Failed to start generators in {self.executor_id}: {str(e)}")
             raise
-
-
-class OrderbookEmitter(EventEmitter):
-    """
-    Emitter that streams orderbook data from an exchange and emits it via NATS.
-
-    This emitter connects to a cryptocurrency exchange using CCXT Pro,
-    receives real-time orderbook data, and emits it through the NATS
-    messaging system for other components to consume.
-    """
-
-    def __init__(
-        self,
-        nats_manager: NatsManager,
-        exchange_id: str,
-        symbol: str,
-        market_type: str = "future",
-        depth: int = 5,
-        reconnect_delay: float = 0.5,
-        executor_id: Optional[str] = None,
-    ):
+    
+    async def _unregister_generators(self) -> None:
         """
-        Initialize the orderbook emitter.
-
-        Args:
-            nats_manager: The NATS manager instance to use for messaging
-            exchange_id: The ID of the exchange to connect to (e.g., 'binance')
-            symbol: The trading symbol to stream (e.g., 'BTC/USDT')
-            market_type: The market type (e.g., 'spot', 'future', 'margin')
-            depth: Number of price levels to include in the emitted data
-            reconnect_delay: Initial delay between reconnection attempts
-            executor_id: Optional unique ID for this emitter
+        Cancel all running generator tasks.
         """
-        self.exchange_id = exchange_id
-        self.symbol = symbol
-        self.market_type = market_type
-        self.depth = depth
-        self.reconnect_delay = reconnect_delay
-
-        # Generate a default executor_id if none provided
-        if executor_id is None:
-            symbol_safe = symbol.replace("/", ".")
-            executor_id = f"orderbook_{exchange_id}_{symbol_safe}_{market_type}"
-
-        super().__init__(nats_manager, executor_id)
-
-        self.exchange = None
-        self._shutdown_requested = False
-
-        # Prepare NATS subject for orderbook data
-        # Format: orderbook.<exchange>.<symbol>.<market_type>.<depth>
-        symbol_safe = symbol.replace("/", ".")
-        self.orderbook_subject = f"orderbook.{exchange_id}.{symbol_safe}.{market_type}.{depth}"
-
-        logger.info(
-            f"OrderbookEmitter initialized for {symbol} on {exchange_id} {market_type} market"
-        )
-
-    async def on_start(self) -> None:
-        """
-        Initialize the exchange connection when the emitter starts.
-        """
-        await super().on_start()
-
-        # Create exchange instance
-        exchange_class = getattr(ccxt.pro, self.exchange_id, None)
-        if not exchange_class:
-            raise ValueError(f"Exchange {self.exchange_id} not found or not supported")
-
-        exchange_config = {
-            "options": {
-                "defaultType": self.market_type,
-            },
-        }
-
-        self.exchange = exchange_class(exchange_config)
-        logger.info(f"Connected to {self.exchange.id} {self.market_type} market")
-        self._shutdown_requested = False
+        try:
+            for task in self._generator_tasks:
+                task.cancel()
+            await asyncio.gather(*self._generator_tasks, return_exceptions=True)
+            logger.debug("All generator tasks have been cancelled and awaited.")
+        except Exception as e:
+            logger.error(f"Error while cancelling generator tasks: {str(e)}")
 
     async def on_execute(self) -> None:
         """
-        Main execution loop that streams and emits orderbook data.
+        Main execution loop. Override to implement specific behavior.
         """
-        if not self.exchange:
-            raise RuntimeError("Exchange connection not initialized")
+        await self._register_generators()
+        await self._shutdown_event.wait()
+        
 
-        await self._stream_orderbook()
 
-    async def on_finish(self) -> None:
+    async def on_stop(self) -> None:
         """
-        Close the exchange connection when the emitter stops.
+        This method is called when the executor stops.
+        It can be overridden by subclasses to implement custom behavior.
         """
-        self._shutdown_requested = True
+        self._shutdown_event.set()
 
-        if self.exchange:
-            try:
-                await self.exchange.close()
-                logger.info(f"Closed connection to {self.exchange_id}")
-            except Exception as e:
-                logger.error(f"Error closing exchange connection: {str(e)}")
-
-        await super().on_finish()
-
-    def _format_orderbook_data(
-        self, orderbook: Dict[str, Any], timestamp: float, latency: float
-    ) -> Dict[str, Any]:
+    async def get_generators(self) -> dict[str, GeneratorFunc]:
         """
-        Format the raw orderbook data for emission.
-
-        Args:
-            orderbook: Raw orderbook data from the exchange
-            timestamp: Timestamp of the orderbook update
-            latency: Latency in milliseconds
-
-        Returns:
-            Formatted orderbook data ready for emission
+        This method should be overridden by subclasses to return a dictionary
+        of subjects and their corresponding generator functions.
         """
-        # Extract the specified depth from the orderbook
-        bids = orderbook["bids"][: self.depth] if "bids" in orderbook else []
-        asks = orderbook["asks"][: self.depth] if "asks" in orderbook else []
+        raise NotImplementedError("Subclasses must implement get_generators()")
 
-        # Calculate spread if possible
-        spread = None
-        spread_percent = None
-        if bids and asks:
-            best_bid = bids[0][0]
-            best_ask = asks[0][0]
-            spread = best_ask - best_bid
-            spread_percent = (spread / best_bid) * 100
-
-        # Format and return the data
-        return {
-            "symbol": self.symbol,
-            "exchange": self.exchange_id,
-            "market_type": self.market_type,
-            "timestamp": timestamp,
-            "latency_ms": latency,
-            "bids": bids,
-            "asks": asks,
-            "spread": spread,
-            "spread_percent": spread_percent,
-            "depth": self.depth,
-        }
-
-    async def _stream_orderbook(self) -> None:
-        """
-        Stream orderbook data from the exchange and emit events.
-        """
-        reconnect_delay = self.reconnect_delay
-
-        while not self._shutdown_requested:
-            try:
-                orderbook = await self.exchange.watch_order_book(self.symbol)
-
-                # Reset reconnect delay on successful fetch
-                reconnect_delay = self.reconnect_delay
-
-                # Calculate update time and latency
-                now = time.time() * 1000
-                timestamp = orderbook.get("timestamp", now)
-                latency = now - timestamp if timestamp else 0
-
-                # Format the orderbook data
-                formatted_data = self._format_orderbook_data(orderbook, timestamp, latency)
-
-                # Emit the orderbook event
-                await self.emit_event(self.orderbook_subject, formatted_data)
-
-                # Include some debug info in logs
-                log_data = {
-                    "symbol": self.symbol,
-                    "best_bid": formatted_data["bids"][0] if formatted_data["bids"] else None,
-                    "best_ask": formatted_data["asks"][0] if formatted_data["asks"] else None,
-                    "latency_ms": formatted_data["latency_ms"],
-                }
-                logger.debug(f"Emitted orderbook update: {log_data}")
-
-                # Small delay to prevent flooding
-                await asyncio.sleep(0.1)
-
-            except (NetworkError, ExchangeNotAvailable) as e:
-                logger.warning(
-                    f"Connection issue with {self.exchange_id}: {type(e).__name__}, {str(e)}"
-                )
-                logger.info(f"Reconnecting in {reconnect_delay:.1f} seconds...")
-                await asyncio.sleep(reconnect_delay)
-                # Implement exponential backoff (max 30 seconds)
-                reconnect_delay = min(reconnect_delay * 1.5, 30.0)
-
-            except Exception as e:
-                logger.error(f"Unexpected error in OrderbookEmitter: {type(e).__name__}, {str(e)}")
-                if not self._shutdown_requested:
-                    logger.info(f"Reconnecting in {reconnect_delay:.1f} seconds...")
-                    await asyncio.sleep(reconnect_delay)
+    
