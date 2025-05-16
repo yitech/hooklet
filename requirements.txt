@@ -1,17 +1,10 @@
-ccxt>=4.0.0
-
 PyYAML>=6.0
-pytest>=7.0.0
-pytest-asyncio>=0.18.3
 nats-py>=2.3.1
-python-binance
 
-# For REST API
-fastapi>=0.95.0
-uvicorn[standard]>=0.21.0
-pydantic>=1.10.0
 
 # Linters and formatters
+pytest>=7.0.0
+pytest-asyncio>=0.18.3
 flake8>=6.0.0
 pylint>=3.0.0
 black>=23.0.0
