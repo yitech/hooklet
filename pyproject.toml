@@ -1,3 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "natsio"
+version = "0.1.0"
+description = "An asynchronous, event-driven Python framework using NATS messaging system"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+]
+dependencies = [
+    "nats-py>=2.3.1",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.18.3",
+    "black",
+    "isort",
+]
+api = [
+    "fastapi>=0.95.0",
+    "uvicorn[standard]>=0.21.0",
+]
+exchange = [
+    "ccxt>=4.0.0",
+    "python-binance",
+]
+
 [tool.black]
 line-length = 100
 target-version = ['py310']

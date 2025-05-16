@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-EMS (Exchange Management System) - A tool for managing cryptocurrency exchange operations.
+NATSIO - An asynchronous, event-driven Python framework using NATS messaging system.
 """
 from .core import EventExecutor
 from .nats_manager import NatsManager
+
+__version__ = "0.1.0"
 
 __all__ = [
     "NatsManager",
     "EventExecutor",
 ]
 
-__version__ = "0.1.0"
