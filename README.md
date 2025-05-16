@@ -1,20 +1,20 @@
-# NATSIO
+# hooklet
 
-An asynchronous, event-driven Python framework for developing applications with NATS messaging system. This framework leverages Python's async/await features and NATS to create a flexible, extensible platform.
+An asynchronous, event-driven Python framework for developing applications with NATS messaging system(expected to support more in the future). This framework leverages Python's async/await features and NATS to create a flexible, extensible event driven class.
 
 ## Installation
 
 ### From PyPI
 
 ```bash
-pip install natsio
+pip install hooklet
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/natsio.git
-cd natsio
+git clone https://github.com/yourusername/hooklet.git
+cd hooklet
 pip install -e .
 ```
 
@@ -22,7 +22,7 @@ pip install -e .
 
 ```python
 import asyncio
-from natsio.nats_manager import NatsManager
+from hooklet.nats_manager import NatsManager
 
 async def main():
     # Connect to NATS
