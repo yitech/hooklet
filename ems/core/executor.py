@@ -1,3 +1,4 @@
+import os
 import datetime
 import logging
 import time
@@ -16,7 +17,10 @@ class EventExecutor(ABC):
     This abstract class provides the structure for event-driven execution.
     """
 
-    def __init__(self, nats_manager: NatsManager, executor_id: None | str = None):
+    def __init__(self, nats_manager: NatsManager | None = None, executor_id: None | str = None):
+        if nats_manager is None:
+            nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
+            nats_manager = NatsManager(nats_url=nats_url)
         self.nats_manager = nats_manager
         self._executor_id = executor_id or uuid.uuid4().hex
 

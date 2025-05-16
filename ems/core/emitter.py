@@ -19,7 +19,7 @@ class EventEmitter(EventExecutor, ABC):
     This abstract class provides the structure for emitting events.
     """
 
-    def __init__(self, nats_manager: NatsManager, executor_id: None | str = None):
+    def __init__(self, nats_manager: NatsManager | None = None, executor_id: None | str = None):
         super().__init__(nats_manager, executor_id)
         self._generator_tasks: List[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
