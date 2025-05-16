@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from typing import Any
-
+import asyncio
 from ems.nats_manager import NatsManager
 
 from .executor import EventExecutor
@@ -18,19 +18,28 @@ class EventHandler(EventExecutor, ABC):
     def __init__(self, nats_manager: NatsManager, executor_id: None | str = None):
         super().__init__(nats_manager, executor_id)
         self._registered_handlers: dict[str, list[str]] = {}
+        self._shutdown_event = asyncio.Event()
 
     async def on_start(self) -> None:
+        self._shutdown_event.clear()
         await self._register_handlers()
 
     async def on_finish(self) -> None:
         await self._unregister_handlers()
+
+    async def on_stop(self) -> None:
+        """
+        This method is called when the executor stops.
+        It can be overridden by subclasses to implement custom behavior.
+        """
+        self._shutdown_event.set()
 
     async def on_execute(self) -> None:
         """
         This method is called when the executor starts executing.
         It can be overridden by subclasses to implement custom behavior.
         """
-        pass
+        await self._shutdown_event.wait()
 
     async def _register_handlers(self) -> None:
         """
