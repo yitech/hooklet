@@ -1,5 +1,5 @@
-from .example import ExampleExecutor
+from .example import ExampleHandler
 
 __all__ = [
-    'ExampleExecutor',
+    "ExampleHandler",
 ]

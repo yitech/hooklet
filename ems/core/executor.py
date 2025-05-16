@@ -1,6 +1,6 @@
-import os
 import datetime
 import logging
+import os
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -79,7 +79,7 @@ class EventExecutor(ABC):
         This method sets the stop event and allows the executor to finish its current task.
         """
         logger.info(f"Stopping executor with ID {self._executor_id}")
-        self._stop_event.set()
+        await self.on_stop()
 
     async def publish(self, subject: str, data: Any) -> None:
         """
