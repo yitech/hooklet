@@ -6,9 +6,9 @@ Run both ExampleEmitter and ExampleHandler in a single script.
 import asyncio
 import logging
 import signal
-from natsio.collection.emitter.example import ExampleEmitter
-from natsio.collection.handler.example import ExampleHandler
-from natsio.nats_manager import NatsManager
+from hooklet.collection.emitter.example import ExampleEmitter
+from hooklet.collection.handler.example import ExampleHandler
+from hooklet.nats_manager import NatsManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
