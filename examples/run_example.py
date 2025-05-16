@@ -7,7 +7,7 @@ import asyncio
 import logging
 import signal
 from hooklet.eventrix.collection import ExampleEmitter, ExampleHandler
-from hooklet.pilot.nats_pilot import NatsPilot
+from hooklet.pilot import NatsPilot
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
