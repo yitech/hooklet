@@ -6,7 +6,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Any
 
-from ems.nats_manager import NatsManager
+from hooklet.nats_manager import NatsManager
 
 logger = logging.getLogger(__name__)
 

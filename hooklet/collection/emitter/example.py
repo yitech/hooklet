@@ -2,7 +2,7 @@ import asyncio
 import logging
 import uuid
 
-from ems.core.emitter import EventEmitter
+from hooklet.core.emitter import EventEmitter
 
 logger = logging.getLogger(__name__)
 

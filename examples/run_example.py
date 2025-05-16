@@ -1,26 +1,8 @@
-# hooklet
+#!/usr/bin/env python3
+"""
+Run both ExampleEmitter and ExampleHandler in a single script.
+"""
 
-An asynchronous, event-driven Python framework for developing applications with NATS messaging system(expected to support more in the future). This framework leverages Python's async/await features and NATS to create a flexible, extensible event driven class.
-
-## Installation
-
-### From PyPI
-
-```bash
-pip install hooklet
-```
-
-### From Source
-
-```bash
-git clone https://github.com/yourusername/hooklet.git
-cd hooklet
-pip install -e .
-```
-
-## Quick Start
-
-```python
 import asyncio
 import logging
 import signal
@@ -83,17 +65,3 @@ if __name__ == "__main__":
         # This captures the KeyboardInterrupt at the top level
         # if it escapes from the main coroutine
         logger.info("Shutdown complete.")
-```
-
-## Examples
-
-See the `examples` directory for more usage examples.
-
-## Requirements
-
-- Python 3.12+
-- nats-py 2.3.1+
-
-## License
-
-MIT

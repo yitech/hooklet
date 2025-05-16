@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Awaitable, Callable
 
-from ems.nats_manager import NatsManager
+from hooklet.nats_manager import NatsManager
 
 from .executor import EventExecutor
 
