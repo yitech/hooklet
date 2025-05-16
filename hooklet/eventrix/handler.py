@@ -32,6 +32,13 @@ class Handler(BaseEventrix, ABC):
             Dictionary mapping subject strings to handler functions
         """
         raise NotImplementedError("Strategies must implement get_handlers()")
+    
+    async def is_running(self) -> bool:
+        """
+        Check if the handler is running.
+        This method can be overridden by subclasses to implement custom checks.
+        """
+        return not self._shutdown_event.is_set()
 
     async def on_start(self) -> None:
         self._shutdown_event.clear()
