@@ -1,11 +1,11 @@
 import logging
 
-from hooklet.core.handler import EventHandler
+from hooklet.eventrix.handler import Handler
 
 logger = logging.getLogger(__name__)
 
 
-class ExampleHandler(EventHandler):
+class ExampleHandler(Handler):
     def get_handlers(self):
         async def handle_example_event(data):
             event_id = data.get("id")

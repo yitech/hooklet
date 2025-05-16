@@ -1,26 +1,22 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator, Callable, List
 
-from hooklet.nats_manager import NatsManager
-
-from .executor import EventExecutor
+from hooklet.base import BaseEventrix, BasePilot
+from hooklet.types import GeneratorFunc
 
 logger = logging.getLogger(__name__)
 
-GeneratorFunc = Callable[[], AsyncIterator[dict[str, Any]]]
 
-
-class EventEmitter(EventExecutor, ABC):
+class Emitter(BaseEventrix, ABC):
     """
     Base class for event emitters.
     This abstract class provides the structure for emitting events.
     """
 
-    def __init__(self, nats_manager: NatsManager | None = None, executor_id: None | str = None):
-        super().__init__(nats_manager, executor_id)
-        self._generator_tasks: List[asyncio.Task] = []
+    def __init__(self, pilot: BasePilot, executor_id: None | str = None):
+        super().__init__(pilot, executor_id)
+        self._generator_tasks: list[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
 
     @abstractmethod
@@ -60,7 +56,7 @@ class EventEmitter(EventExecutor, ABC):
                 async def run_generator(subject=subject, generator=generator):
                     try:
                         async for data in generator():
-                            await self.nats_manager.publish(subject, data)
+                            await self.pilot.publish(subject, data)
                     except asyncio.CancelledError:
                         logger.info(f"Generator for subject '{subject}' was cancelled.")
                     except Exception as e:
