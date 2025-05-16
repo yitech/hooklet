@@ -24,6 +24,14 @@ class EventEmitter(EventExecutor, ABC):
         self._generator_tasks: List[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
 
+    @abstractmethod
+    async def get_generators(self) -> dict[str, GeneratorFunc]:
+        """
+        This method should be overridden by subclasses to return a dictionary
+        of subjects and their corresponding generator functions.
+        """
+        raise NotImplementedError("Subclasses must implement get_generators()")
+
     async def on_start(self) -> None:
         """
         Called when the emitter starts. Override to add specific initialization.
@@ -94,11 +102,6 @@ class EventEmitter(EventExecutor, ABC):
         """
         self._shutdown_event.set()
 
-    async def get_generators(self) -> dict[str, GeneratorFunc]:
-        """
-        This method should be overridden by subclasses to return a dictionary
-        of subjects and their corresponding generator functions.
-        """
-        raise NotImplementedError("Subclasses must implement get_generators()")
+    
 
     

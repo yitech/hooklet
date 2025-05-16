@@ -21,6 +21,20 @@ class EventHandler(EventExecutor, ABC):
         self._registered_handlers: dict[str, list[str]] = {}
         self._shutdown_event = asyncio.Event()
 
+    @abstractmethod
+    def get_handlers(self) -> dict[str, HandlerFunc]:
+        """
+        Get the mapping of subjects to handler functions.
+
+        This method must be implemented by subclasses to define which
+        NATS subjects they want to subscribe to and what handler functions
+        should be called when messages are received.
+
+        Returns:
+            Dictionary mapping subject strings to handler functions
+        """
+        raise NotImplementedError("Strategies must implement get_handlers()")
+
     async def on_start(self) -> None:
         self._shutdown_event.clear()
         await self._register_handlers()
@@ -84,16 +98,3 @@ class EventHandler(EventExecutor, ABC):
             logger.error(f"Error in strategy {self.executor_id}: {str(e)}")
             raise
 
-    @abstractmethod
-    def get_handlers(self) -> dict[str, HandlerFunc]:
-        """
-        Get the mapping of subjects to handler functions.
-
-        This method must be implemented by subclasses to define which
-        NATS subjects they want to subscribe to and what handler functions
-        should be called when messages are received.
-
-        Returns:
-            Dictionary mapping subject strings to handler functions
-        """
-        raise NotImplementedError("Strategies must implement get_handlers()")
