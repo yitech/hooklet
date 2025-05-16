@@ -33,7 +33,7 @@ class Handler(BaseEventrix, ABC):
         """
         raise NotImplementedError("Strategies must implement get_handlers()")
     
-    async def is_running(self) -> bool:
+    def is_running(self) -> bool:
         """
         Check if the handler is running.
         This method can be overridden by subclasses to implement custom checks.

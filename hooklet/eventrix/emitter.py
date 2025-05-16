@@ -27,7 +27,7 @@ class Emitter(BaseEventrix, ABC):
         """
         raise NotImplementedError("Subclasses must implement get_generators()")
     
-    async def is_running(self) -> bool:
+    def is_running(self) -> bool:
         """
         Check if the emitter is running.
         This method can be overridden by subclasses to implement custom checks.
