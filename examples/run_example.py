@@ -6,9 +6,8 @@ Run both ExampleEmitter and ExampleHandler in a single script.
 import asyncio
 import logging
 import signal
-from hooklet.collection.emitter.example import ExampleEmitter
-from hooklet.collection.handler.example import ExampleHandler
-from hooklet.nats_manager import NatsManager
+from hooklet.eventrix.collection import ExampleEmitter, ExampleHandler
+from hooklet.pilot import NatsPilot
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -20,11 +19,11 @@ async def handle_shutdown(shutdown_event):
     shutdown_event.set()
 
 async def main():
-    nats_manager = NatsManager()
-    await nats_manager.connect()
+    nats_pilot = NatsPilot()
+    await nats_pilot.connect()
 
-    emitter = ExampleEmitter(nats_manager=nats_manager)
-    handler = ExampleHandler(nats_manager=nats_manager)
+    emitter = ExampleEmitter(pilot=nats_pilot)
+    handler = ExampleHandler(pilot=nats_pilot)
 
     # Run both emitter and handler concurrently
     emitter_task = asyncio.create_task(emitter.start())
@@ -56,7 +55,7 @@ async def main():
         await asyncio.gather(emitter_task, handler_task, return_exceptions=True)
 
         # Finally close the NATS connection
-        await nats_manager.close()
+        await nats_pilot.close()
 
 if __name__ == "__main__":
     try:

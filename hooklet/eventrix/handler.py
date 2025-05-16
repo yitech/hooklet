@@ -1,30 +1,26 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Awaitable, Callable
 
-from hooklet.nats_manager import NatsManager
-
-from .executor import EventExecutor
-
-HandlerFunc = Callable[[Any], Awaitable[Any]]
+from hooklet.base import BaseEventrix, BasePilot
+from hooklet.types import MessageHandlerCallback
 
 logger = logging.getLogger(__name__)
 
 
-class EventHandler(EventExecutor, ABC):
+class Handler(BaseEventrix, ABC):
     """
     Base class for event handlers.
     This abstract class provides the structure for handling events.
     """
 
-    def __init__(self, nats_manager: NatsManager | None = None, executor_id: None | str = None):
-        super().__init__(nats_manager, executor_id)
+    def __init__(self, pilot: BasePilot, executor_id: None | str = None):
+        super().__init__(pilot, executor_id)
         self._registered_handlers: dict[str, list[str]] = {}
         self._shutdown_event = asyncio.Event()
 
     @abstractmethod
-    def get_handlers(self) -> dict[str, HandlerFunc]:
+    def get_handlers(self) -> dict[str, MessageHandlerCallback]:
         """
         Get the mapping of subjects to handler functions.
 
@@ -67,7 +63,7 @@ class EventHandler(EventExecutor, ABC):
             for subject, handler in handlers.items():
                 handler_id = f"{self.executor_id}_{subject}"
                 try:
-                    await self.nats_manager.register_handler(subject, handler, handler_id)
+                    await self.pilot.register_handler(subject, handler, handler_id)
                     if subject not in self._registered_handlers:
                         self._registered_handlers[subject] = []
                     self._registered_handlers[subject].append(handler_id)
@@ -86,7 +82,7 @@ class EventHandler(EventExecutor, ABC):
             for subject, handler_ids in self._registered_handlers.items():
                 for handler_id in handler_ids:
                     try:
-                        success = await self.nats_manager.unregister_handler(subject, handler_id)
+                        success = await self.pilot.unregister_handler(subject, handler_id)
                         if success:
                             logger.debug(f"Unregistered handler {handler_id} from {subject}")
                         else:

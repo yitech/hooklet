@@ -2,12 +2,12 @@ import asyncio
 import logging
 import uuid
 
-from hooklet.core.emitter import EventEmitter
+from hooklet.eventrix.emitter import Emitter
 
 logger = logging.getLogger(__name__)
 
 
-class ExampleEmitter(EventEmitter):
+class ExampleEmitter(Emitter):
     async def get_generators(self):
         async def example_generator():
             while True:

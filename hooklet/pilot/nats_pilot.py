@@ -9,18 +9,17 @@ register and unregister handler functions for NATS subjects.
 import json
 import logging
 import os
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from nats.aio.client import Client as NATS
 from nats.aio.subscription import Subscription
 
+from hooklet.types import MessageHandlerCallback
+
 logger = logging.getLogger(__name__)
 
-# Type for async message handler functions
-MessageHandlerType = Callable[[Any], Awaitable[None]]
 
-
-class NatsManager:
+class NatsPilot:
     """
     Class for managing NATS connections and message handlers.
 
@@ -44,7 +43,7 @@ class NatsManager:
         self._subscriptions: Dict[str, Dict[str, Subscription]] = (
             {}
         )  # {subject: {handler_id: subscription}}
-        self._handlers: Dict[str, Dict[str, MessageHandlerType]] = (
+        self._handlers: Dict[str, Dict[str, MessageHandlerCallback]] = (
             {}
         )  # {subject: {handler_id: handler_func}}
 
@@ -89,7 +88,7 @@ class NatsManager:
             self._handlers = {}
 
     async def register_handler(
-        self, subject: str, handler: MessageHandlerType, handler_id: Optional[str] = None
+        self, subject: str, handler: MessageHandlerCallback, handler_id: Optional[str] = None
     ) -> str:
         """
         Register a handler function for a specific subject.
