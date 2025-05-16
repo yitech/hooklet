@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Callable, List
 
-from ems.nats_manager import NatsManager
+from natsio.nats_manager import NatsManager
 
 from .executor import EventExecutor
 

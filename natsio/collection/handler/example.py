@@ -1,6 +1,6 @@
 import logging
 
-from ems.core.handler import EventHandler
+from natsio.core.handler import EventHandler
 
 logger = logging.getLogger(__name__)
 

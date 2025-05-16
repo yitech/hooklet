@@ -5,6 +5,7 @@ Run both ExampleEmitter and ExampleHandler in a single script.
 
 import asyncio
 import logging
+import signal
 from natsio.collection.emitter.example import ExampleEmitter
 from natsio.collection.handler.example import ExampleHandler
 from natsio.nats_manager import NatsManager
@@ -12,6 +13,11 @@ from natsio.nats_manager import NatsManager
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+async def handle_shutdown(shutdown_event):
+    """Handle graceful shutdown when SIGINT is received."""
+    logger.info("Shutting down...")
+    shutdown_event.set()
 
 async def main():
     nats_manager = NatsManager()
@@ -26,10 +32,21 @@ async def main():
 
     try:
         logger.info("ExampleEmitter and ExampleHandler are running. Press Ctrl+C to stop.")
-        while True:
-            await asyncio.sleep(1)
-    except KeyboardInterrupt:
-        logger.info("Shutting down...")
+        # Create an event for clean shutdown
+        shutdown_event = asyncio.Event()
+        
+        # Set up a signal handler for keyboard interrupt
+        loop = asyncio.get_running_loop()
+        loop.add_signal_handler(
+            signal.SIGINT,
+            lambda: asyncio.create_task(handle_shutdown(shutdown_event))
+        )
+        
+        # Wait until shutdown is triggered
+        await shutdown_event.wait()
+        
+    except asyncio.CancelledError:
+        logger.info("Task was cancelled, shutting down...")
     finally:
         # First, stop both components
         await emitter.stop()
@@ -42,4 +59,9 @@ async def main():
         await nats_manager.close()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        # This captures the KeyboardInterrupt at the top level
+        # if it escapes from the main coroutine
+        logger.info("Shutdown complete.")
