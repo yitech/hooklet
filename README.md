@@ -13,7 +13,7 @@ pip install hooklet
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/hooklet.git
+git clone https://github.com/yitech/hooklet.git
 cd hooklet
 pip install -e .
 ```
