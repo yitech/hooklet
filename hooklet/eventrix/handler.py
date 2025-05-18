@@ -42,15 +42,15 @@ class Handler(BaseEventrix, ABC):
     
     @property
     def status(self) -> dict[str, Any]:
+        base_status = super(self).status
         curr_status = {
             "executor_id": self.executor_id,
             "type": self.__class__.__name__,
             "status": "running" if self.is_running() else "stopped",
             "registered_handlers": self._registered_handlers,
         }
-        base_status = super(self).status
-        curr_status.update(base_status)
-        return curr_status
+        
+        return {**base_status, **curr_status}
 
     async def on_start(self) -> None:
         self._shutdown_event.clear()

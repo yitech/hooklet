@@ -43,8 +43,7 @@ class Emitter(BaseEventrix, ABC):
             "generator_tasks": [task.get_name() for task in self._generator_tasks],
         }
         base_status = super(self).status
-        curr_status.update(base_status)
-        return curr_status
+        return {**base_status, **curr_status}
 
     async def on_start(self) -> None:
         """
