@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-
+from typing import Any
 from hooklet.base import BaseEventrix, BasePilot
 from hooklet.types import GeneratorFunc
 
@@ -33,6 +33,18 @@ class Emitter(BaseEventrix, ABC):
         This method can be overridden by subclasses to implement custom checks.
         """
         return not self._shutdown_event.is_set()
+    
+    @property
+    def status(self) -> dict[str, Any]:
+        curr_status = {
+            "executor_id": self.executor_id,
+            "type": self.__class__.__name__,
+            "status": "running" if self.is_running() else "stopped",
+            "generator_tasks": [task.get_name() for task in self._generator_tasks],
+        }
+        base_status = super(self).status
+        curr_status.update(base_status)
+        return curr_status
 
     async def on_start(self) -> None:
         """

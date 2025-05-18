@@ -133,6 +133,21 @@ class BaseEventrix(ABC):
         logger.info(f"Stopping executor with ID {self._executor_id}")
         await self.on_stop()
 
+    @property
+    def status(self) -> dict[str, Any]:
+        """
+        Get the status of the executor.
+        :return: A dictionary containing the status of the executor.
+        """
+        return {
+            "type": self.__class__.__name__,
+            "executor_id": self._executor_id,
+            "created_at": self._created_at,
+            "started_at": self._started_at,
+            "finished_at": self._finished_at,
+            "status": "running" if self._started_at and not self._finished_at else "stopped",
+        }
+
     async def publish(self, subject: str, data: Any) -> None:
         """
         Publish data to the configured subject.
