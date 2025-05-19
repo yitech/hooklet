@@ -9,6 +9,7 @@ write_to_template = '__version__ = "{version}"'
 [project]
 name = "hooklet"
 description = "An asynchronous, event-driven Python framework using NATS messaging system"
+dynamic = ["version"]
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
