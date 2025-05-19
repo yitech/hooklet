@@ -3,4 +3,4 @@
 hooklet - An asynchronous, event-driven Python framework using NATS messaging system.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
