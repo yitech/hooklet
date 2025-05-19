@@ -4,6 +4,7 @@ import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
+import asyncio
 
 from hooklet.types import MessageHandlerCallback
 
@@ -76,6 +77,7 @@ class BaseEventrix(ABC):
         self.pilot = pilot
         self._executor_id = executor_id or str(uuid.uuid4())
 
+        self._task: asyncio.Task | None = None
         self._created_at: int = int(time.time() * 1000)  # milliseconds
         self._started_at: int = 0
         self._finished_at: int = 0
@@ -97,21 +99,28 @@ class BaseEventrix(ABC):
         self._started_at = int(time.time() * 1000)  # milliseconds
         await self.on_start()
 
-        try:
-            await self._run_executor()
+        task = asyncio.create_task(self._run_executor())
+        if self._task:
+            logger.warning(
+                f"Executor {self._executor_id} is already running. "
+                f"Stopping the previous task before starting a new one."
+            )
+            self._task.cancel()
+        self._task = task
+        
 
+    async def _run_executor(self) -> None:
+        """
+        Waits until stop() is called.
+        """
+        try:
+            await self.on_execute()
         except Exception as e:
             logger.error(f"Executor {self._executor_id} failed: {str(e)}")
             await self.on_error(e)  # Optional error handling
             raise
         finally:
             await self._finish()  # finish the executor
-
-    async def _run_executor(self) -> None:
-        """
-        Waits until stop() is called.
-        """
-        await self.on_execute()
 
     async def _finish(self) -> None:
         await self.on_finish()
@@ -131,6 +140,7 @@ class BaseEventrix(ABC):
         This method sets the stop event and allows the executor to finish its current task.
         """
         logger.info(f"Stopping executor with ID {self._executor_id}")
+        self._task.cancel()
         await self.on_stop()
 
     @property

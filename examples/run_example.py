@@ -26,8 +26,8 @@ async def main():
     handler = ExampleHandler(pilot=nats_pilot)
 
     # Run both emitter and handler concurrently
-    emitter_task = asyncio.create_task(emitter.start())
-    handler_task = asyncio.create_task(handler.start())
+    await emitter.start()
+    await handler.start()
 
     try:
         logger.info("ExampleEmitter and ExampleHandler are running. Press Ctrl+C to stop.")
@@ -50,9 +50,6 @@ async def main():
         # First, stop both components
         await emitter.stop()
         await handler.stop()
-
-        # Wait for their tasks to complete
-        await asyncio.gather(emitter_task, handler_task, return_exceptions=True)
 
         # Finally close the NATS connection
         await nats_pilot.close()
