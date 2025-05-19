@@ -42,7 +42,7 @@ class Handler(BaseEventrix, ABC):
     
     @property
     def status(self) -> dict[str, Any]:
-        base_status = super(self).status
+        base_status = super().status
         curr_status = {
             "executor_id": self.executor_id,
             "type": self.__class__.__name__,
