@@ -42,7 +42,7 @@ class Emitter(BaseEventrix, ABC):
             "status": "running" if self.is_running() else "stopped",
             "generator_tasks": [task.get_name() for task in self._generator_tasks],
         }
-        base_status = super(self).status
+        base_status = super().status
         return {**base_status, **curr_status}
 
     async def on_start(self) -> None:
