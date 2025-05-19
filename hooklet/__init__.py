@@ -1,6 +1,1 @@
-#!/usr/bin/env python3
-"""
-hooklet - An asynchronous, event-driven Python framework using NATS messaging system.
-"""
-
-__version__ = "0.3.1"
+__version__ = "0.1.dev65+g42d5e6f.d20250519"
