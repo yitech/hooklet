@@ -149,46 +149,45 @@ class NatsPilot(BasePilot):
         logger.info(f"Registered handler '{handler_id}' for subject '{subject}'")
         return handler_id
 
-    async def unregister_handler(self, subject: str, handler_id: str) -> bool:
+    async def unregister_handler(self, handler_id: str) -> bool:
         """
-        Unregister a handler function for a specific subject.
+        Unregister a handler function by its ID.
 
         Args:
-            subject: NATS subject the handler is registered for.
             handler_id: Unique identifier of the handler to unregister.
 
         Returns:
-            True if successfully unregistered, False if handler not found.
+            None
         """
         if not self._connected:
             logger.warning("Not connected to NATS. Cannot unregister handler.")
-            return False
+            return
 
-        # Check if subject and handler_id exist
-        if (
-            subject not in self._subscriptions
-            or subject not in self._handlers
-            or handler_id not in self._subscriptions[subject]
-        ):
-            logger.warning(f"Handler '{handler_id}' for subject '{subject}' not found")
-            return False
+        # Search for the handler_id across all subjects
+        found = False
+        for subject in list(self._handlers.keys()):
+            if handler_id in self._handlers[subject]:
+                # Found the handler, now unsubscribe from NATS
+                sub = self._subscriptions[subject][handler_id]
+                await sub.unsubscribe()
 
-        # Unsubscribe from NATS
-        sub = self._subscriptions[subject][handler_id]
-        await sub.unsubscribe()
+                # Remove subscription and handler
+                del self._subscriptions[subject][handler_id]
+                del self._handlers[subject][handler_id]
+                found = True
 
-        # Remove subscription and handler
-        del self._subscriptions[subject][handler_id]
-        del self._handlers[subject][handler_id]
+                # Clean up empty dictionaries
+                if not self._subscriptions[subject]:
+                    del self._subscriptions[subject]
+                if not self._handlers[subject]:
+                    del self._handlers[subject]
 
-        # Clean up empty dictionaries
-        if not self._subscriptions[subject]:
-            del self._subscriptions[subject]
-        if not self._handlers[subject]:
-            del self._handlers[subject]
+                logger.info(f"Unregistered handler '{handler_id}' from subject '{subject}'")
+                break
 
-        logger.info(f"Unregistered handler '{handler_id}' from subject '{subject}'")
-        return True
+        if not found:
+            logger.warning(f"Handler '{handler_id}' not found")
+        return found
 
     async def publish(self, subject: str, data: Any) -> None:
         """

@@ -51,7 +51,7 @@ class BasePilot(ABC):
         raise NotImplementedError("Subclasses must implement register_handler()")
 
     @abstractmethod
-    async def unregister_handler(self, handler_id: str) -> None:
+    async def unregister_handler(self, handler_id: str) -> bool:
         """
         Unregister a handler by its ID.
         This method should be implemented by subclasses to unregister the handler.
@@ -194,4 +194,3 @@ class BaseEventrix(ABC):
 
     async def on_error(self, exception: Exception) -> None:
         """OPTIONAL: Override to handle execution errors."""
-        pass

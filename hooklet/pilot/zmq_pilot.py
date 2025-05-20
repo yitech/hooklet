@@ -192,7 +192,7 @@ class ZmqPilot(BasePilot):
         logger.debug(f"Registered handler {handler_id} for subject {subject}")
         return handler_id
 
-    async def unregister_handler(self, handler_id: str) -> None:
+    async def unregister_handler(self, handler_id: str) -> bool:
         removed = False
         for subject in list(self._handlers.keys()):
             if handler_id in self._handlers.get(subject, {}):
@@ -209,6 +209,8 @@ class ZmqPilot(BasePilot):
             logger.warning(f"Handler {handler_id} not found")
         else:
             logger.debug(f"Unregistered handler {handler_id}")
+        
+        return removed
 
     async def publish(self, subject: str, data: Any) -> None:
         if not self._connected:

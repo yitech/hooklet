@@ -94,9 +94,9 @@ class TestExampleHandler:
             
             # Verify unregister_handler was called with expected arguments
             mock_unregister.assert_called_once()
-            subject, handler_id = mock_unregister.call_args[0]
+            handler_id = mock_unregister.call_args[0][0]
             
-            assert subject == "example"
+            # Check that the handler_id follows the expected format
             assert handler_id.startswith(f"{example_handler.executor_id}_example")
             
             # Verify that registered handlers were cleared

@@ -102,15 +102,21 @@ class Handler(BaseEventrix, ABC):
             for subject, handler_ids in self._registered_handlers.items():
                 for handler_id in handler_ids:
                     try:
-                        success = await self.pilot.unregister_handler(subject, handler_id)
-                        if success:
-                            logger.debug(f"Unregistered handler {handler_id} from {subject}")
+                        # Try to unregister the handler
+                        # Note: Some pilot implementations return None, others may return a boolean
+                        result = await self.pilot.unregister_handler(handler_id)
+                        # If result is a boolean and False, log a warning
+                        if result is False:
+                            logger.warning(f"Failed to unregister handler {handler_id} from {subject}")
                         else:
-                            logger.warning(
-                                f"Failed to unregister handler {handler_id} from {subject}"
-                            )
+                            # Success or None return value (assume success)
+                            logger.debug(f"Unregistered handler {handler_id} from {subject}")
                     except Exception as e:
-                        logger.error(f"Error unregistering handler {handler_id}: {str(e)}")
+                        # Check if this is a connection closed error
+                        if "connection closed" in str(e).lower():
+                            logger.debug(f"Connection already closed while unregistering handler {handler_id}. This is normal during shutdown.")
+                        else:
+                            logger.error(f"Error unregistering handler {handler_id}: {str(e)}")
             self._registered_handlers.clear()
         except Exception as e:
             logger.error(f"Error in strategy {self.executor_id}: {str(e)}")
