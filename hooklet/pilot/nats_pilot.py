@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NATS Manager module for the EMS (Exchange Management System).
+NATS Manager module for the hooklet
 
 This module provides a class to manage connections to NATS,
 register and unregister handler functions for NATS subjects.
@@ -13,13 +13,13 @@ from typing import Any, Dict, List, Optional
 
 from nats.aio.client import Client as NATS
 from nats.aio.subscription import Subscription
-
+from hooklet.base import BasePilot
 from hooklet.types import MessageHandlerCallback
 
 logger = logging.getLogger(__name__)
 
 
-class NatsPilot:
+class NatsPilot(BasePilot):
     """
     Class for managing NATS connections and message handlers.
 

@@ -1,6 +1,6 @@
 PyYAML>=6.0
 nats-py>=2.3.1
-
+pyzmq>=25.0.0
 
 # Linters and formatters
 pytest>=7.0.0
