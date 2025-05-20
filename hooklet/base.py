@@ -1,10 +1,10 @@
+import asyncio
 import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
-import asyncio
 
 from hooklet.types import MessageHandlerCallback
 
@@ -107,7 +107,6 @@ class BaseEventrix(ABC):
             )
             self._task.cancel()
         self._task = task
-        
 
     async def _run_executor(self) -> None:
         """

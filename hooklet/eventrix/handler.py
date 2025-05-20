@@ -2,6 +2,7 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Any
+
 from hooklet.base import BaseEventrix, BasePilot
 from hooklet.types import MessageHandlerCallback
 
@@ -32,14 +33,14 @@ class Handler(BaseEventrix, ABC):
             Dictionary mapping subject strings to handler functions
         """
         raise NotImplementedError("Strategies must implement get_handlers()")
-    
+
     def is_running(self) -> bool:
         """
         Check if the handler is running.
         This method can be overridden by subclasses to implement custom checks.
         """
         return not self._shutdown_event.is_set()
-    
+
     @property
     def status(self) -> dict[str, Any]:
         base_status = super().status
@@ -49,7 +50,7 @@ class Handler(BaseEventrix, ABC):
             "status": "running" if self.is_running() else "stopped",
             "registered_handlers": self._registered_handlers,
         }
-        
+
         return {**base_status, **curr_status}
 
     async def on_start(self) -> None:

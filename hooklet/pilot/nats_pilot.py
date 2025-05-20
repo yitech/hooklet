@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from nats.aio.client import Client as NATS
 from nats.aio.subscription import Subscription
+
 from hooklet.base import BasePilot
 from hooklet.types import MessageHandlerCallback
 

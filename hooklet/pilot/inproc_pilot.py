@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import uuid
-from typing import Any, Dict, Set
+from typing import Any, Dict
 
 from hooklet.base import BasePilot
 from hooklet.types import MessageHandlerCallback
@@ -46,7 +46,7 @@ class InProcPilot(BasePilot):
         logger.info("InProcPilot closed")
 
     async def register_handler(
-        self, subject: str, handler: Any, handler_id: str | None = None
+        self, subject: str, handler: MessageHandlerCallback, handler_id: str | None = None
     ) -> str:
         if handler_id is None:
             handler_id = str(uuid.uuid4())
