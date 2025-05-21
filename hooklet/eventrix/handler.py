@@ -91,7 +91,7 @@ class Handler(BaseEventrix, ABC):
                 except Exception as e:
                     logger.error(f"Failed to register handler for {subject}: {str(e)}")
         except Exception as e:
-            logger.error(f"Error in handler {self.executor_id}: {str(e)}")
+            logger.error(f"Error in handler {self.executor_id}: {str(e)}", exc_info=True)
             raise
 
     async def _unregister_handlers(self) -> None:
