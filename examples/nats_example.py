@@ -24,7 +24,7 @@ async def main():
 
     emitter = ExampleEmitter(pilot=nats_pilot)
     handler = ExampleHandler(pilot=nats_pilot)
-
+    
     # Run both emitter and handler concurrently
     await emitter.start()
     await handler.start()

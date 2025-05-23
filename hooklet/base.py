@@ -4,7 +4,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
 
 from hooklet.types import MessageHandlerCallback
 
@@ -81,6 +81,12 @@ class BaseEventrix(ABC):
         self._created_at: int = int(time.time() * 1000)  # milliseconds
         self._started_at: int = 0
         self._finished_at: int = 0
+        self._event_listeners: dict[str, dict[str, dict[Callable, tuple, dict]]] = {
+            "start": {},
+            "error": {},
+            "finish": {},
+        }
+        # Format: {event_name: {listener_id: (callback, args, kwargs)}}
 
     @property
     def executor_id(self) -> str:
@@ -90,6 +96,37 @@ class BaseEventrix(ABC):
         """
         return self._executor_id
 
+    def add_listener(
+        self, event: str, callback: Callable[..., None], *args: Any, **kwargs: Any
+    ) -> None:
+        """Register a callback with optional arguments."""
+        listener_id = str(uuid.uuid4())
+        if event not in self._event_listeners:
+            raise ValueError(f"Event '{event}' is not supported.")
+        self._event_listeners[event][listener_id] = (callback, args, kwargs)
+        return listener_id
+
+    def remove_listener(self, event: str, listener_id: str) -> bool:
+        """Remove a listener by its ID. Returns True if removed."""
+        if event in self._event_listeners and listener_id in self._event_listeners[event]:
+            del self._event_listeners[event][listener_id]
+            return True
+        return False
+
+    async def _notify(self, event: str) -> None:
+        """Notify all registered listeners for the given event."""
+        if event not in self._event_listeners:
+            return
+    
+        for _, (callback, args, kwargs) in list(self._event_listeners[event].items()):
+            try:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(*args, **kwargs)  # Using args and kwargs from storage, not passing the event
+                else:
+                    callback(*args, **kwargs)  # Same here
+            except Exception as e:
+                logger.error(f"Listener error: {e}")
+
     async def start(self) -> None:
         logger.info(f"Starting executor with ID {self._executor_id}")
 
@@ -98,6 +135,7 @@ class BaseEventrix(ABC):
 
         self._started_at = int(time.time() * 1000)  # milliseconds
         await self.on_start()
+        await self._notify("start")
 
         task = asyncio.create_task(self._run_executor())
         if self._task:
@@ -117,9 +155,11 @@ class BaseEventrix(ABC):
         except Exception as e:
             logger.error(f"Executor {self._executor_id} failed: {str(e)}")
             await self.on_error(e)  # Optional error handling
+            await self._notify("error")
             raise
         finally:
             await self._finish()  # finish the executor
+            await self._notify("finish")
 
     async def _finish(self) -> None:
         await self.on_finish()
