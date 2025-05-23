@@ -117,13 +117,13 @@ class BaseEventrix(ABC):
         """Notify all registered listeners for the given event."""
         if event not in self._event_listeners:
             return
-
+    
         for _, (callback, args, kwargs) in list(self._event_listeners[event].items()):
             try:
                 if asyncio.iscoroutinefunction(callback):
-                    await callback(*args, **kwargs)
+                    await callback(*args, **kwargs)  # Using args and kwargs from storage, not passing the event
                 else:
-                    callback(*args, **kwargs)
+                    callback(*args, **kwargs)  # Same here
             except Exception as e:
                 logger.error(f"Listener error: {e}")
 
