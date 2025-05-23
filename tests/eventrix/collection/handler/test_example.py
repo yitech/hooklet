@@ -2,6 +2,7 @@ import asyncio
 import pytest
 import pytest_asyncio
 import logging
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from hooklet.eventrix.collection.handler.example import ExampleHandler
@@ -61,6 +62,62 @@ class TestExampleHandler:
             
             # Verify the log message
             mock_log.assert_called_once_with("Received event with id: test-id-123")
+
+    @pytest.mark.asyncio
+    async def test_add_listener(self, example_handler):
+        """Test that add_listener correctly registers a listener."""
+        # Create a mock listener function
+        async def test_listener(event):
+            pass
+        
+        # Add the listener to a supported event ("start", "error", or "finish")
+        listener_id = example_handler.add_listener("start", test_listener)
+        
+        # Verify the listener was added
+        assert "start" in example_handler._event_listeners
+        assert listener_id in example_handler._event_listeners["start"]
+        assert example_handler._event_listeners["start"][listener_id][0] == test_listener
+        
+        # Test adding a second listener to the same event
+        async def another_listener(event):
+            pass
+        
+        another_id = example_handler.add_listener("start", another_listener)
+        assert len(example_handler._event_listeners["start"]) == 2
+        assert example_handler._event_listeners["start"][another_id][0] == another_listener
+    
+    @pytest.mark.asyncio
+    async def test_remove_listener(self, example_handler):
+        """Test that remove_listener correctly unregisters a listener."""
+        # Create and add a mock listener function
+        async def test_listener(event):
+            pass
+        
+        # Add a listener to a supported event
+        listener_id = example_handler.add_listener("start", test_listener)
+        
+        # Verify removal works
+        result = example_handler.remove_listener("start", listener_id)
+        assert result is True
+        assert listener_id not in example_handler._event_listeners["start"]
+        
+        # Test removing a listener that doesn't exist
+        nonexistent_id = str(uuid.uuid4())
+        
+        # Should not raise an exception and return False
+        result = example_handler.remove_listener("start", nonexistent_id)
+        assert result is False
+        
+        # Test removing from an event type with no listeners
+        result = example_handler.remove_listener("nonexistent_event", nonexistent_id)
+        assert result is False
+        
+        # Test removing the last listener for an event, but should still keep the event key
+        another_id = example_handler.add_listener("finish", test_listener)
+        result = example_handler.remove_listener("finish", another_id)
+        assert result is True
+        assert "finish" in example_handler._event_listeners  # Event key still exists
+        assert another_id not in example_handler._event_listeners["finish"]
     
     @pytest.mark.asyncio
     async def test_handler_registration(self, example_handler, inproc_pilot):
