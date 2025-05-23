@@ -38,7 +38,7 @@ class ExampleEmitter(Emitter):
                     "timestamp": datetime.now().isoformat(),
                     "counter": counter,
                 }
-                
+
                 await asyncio.sleep(1)  # Emit every second
                 logger.info(f"Emitting event: {event['id']} (#{counter})")
                 counter += 1

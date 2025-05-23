@@ -107,14 +107,20 @@ class Handler(BaseEventrix, ABC):
                         result = await self.pilot.unregister_handler(handler_id)
                         # If result is a boolean and False, log a warning
                         if result is False:
-                            logger.warning(f"Failed to unregister handler {handler_id} from {subject}")
+                            logger.warning(
+                                f"Failed to unregister handler {handler_id} from {subject}"
+                            )
                         else:
                             # Success or None return value (assume success)
                             logger.debug(f"Unregistered handler {handler_id} from {subject}")
                     except Exception as e:
                         # Check if this is a connection closed error
                         if "connection closed" in str(e).lower():
-                            logger.debug(f"Connection already closed while unregistering handler {handler_id}. This is normal during shutdown.")
+                            logger.debug(
+                                "Connection already closed while unregistering "
+                                f"handler {handler_id}."
+                                "This is normal during shutdown."
+                            )
                         else:
                             logger.error(f"Error unregistering handler {handler_id}: {str(e)}")
             self._registered_handlers.clear()
