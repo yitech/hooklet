@@ -1,103 +1,36 @@
 """
-Utility module for generating human-readable IDs.
+Utility module for generating IDs.
 """
 
 import random
 
-# List of simple words that can be used for IDs
-# These words are chosen to be short, clear, and easy to read/remember
-ADJECTIVES = [
-    "red",
-    "blue",
-    "green",
-    "bold",
-    "calm",
-    "dark",
-    "deep",
-    "fast",
-    "glad",
-    "good",
-    "kind",
-    "light",
-    "loud",
-    "mild",
-    "neat",
-    "new",
-    "pure",
-    "quick",
-    "real",
-    "soft",
-    "warm",
-    "wise",
-    "brave",
-    "cool",
-    "free",
-    "gold",
-    "happy",
-    "keen",
-    "lucky",
-    "nice",
-    "proud",
-    "safe",
-    "sharp",
-    "smart",
-    "strong",
-    "sweet",
-    "true",
-    "wild",
-    "young",
-]
-
-NOUNS = [
-    "air",
-    "bird",
-    "book",
-    "cloud",
-    "door",
-    "fire",
-    "fish",
-    "flag",
-    "game",
-    "home",
-    "king",
-    "leaf",
-    "moon",
-    "note",
-    "park",
-    "path",
-    "rain",
-    "road",
-    "rock",
-    "sand",
-    "star",
+# List of words that can be used for IDs
+# Words must be shorter than 6 characters to leave room for numbers
+WORDS = [
     "sun",
-    "time",
-    "tree",
-    "wave",
-    "wind",
-    "wolf",
-    "bear",
     "cat",
-    "deer",
-    "dove",
-    "duck",
+    "dog",
     "fox",
-    "hawk",
-    "lion",
     "owl",
-    "rose",
-    "sage",
-    "sea",
+    "bee",
     "sky",
+    "sea",
+    "air",
+    "ice",
+    "oak",
+    "elm",
+    "ant",
+    "bat",
+    "pig",
 ]
-
 
 def generate_id() -> str:
-    """Generate a human-readable random ID using an adjective and a noun.
+    """Generate an ID with a word followed by numbers, always 6 characters total.
 
     Returns:
-        A string like 'bold-hawk' or 'quick-fox'
+        A string like 'sun123' or 'cat001' or 'owl420'
     """
-    adjective = random.choice(ADJECTIVES)
-    noun = random.choice(NOUNS)
-    return f"{adjective}-{noun}"
+    word = random.choice(WORDS)
+    remaining_digits = 6 - len(word)
+    number = random.randint(0, 10 ** remaining_digits - 1)
+    return f"{word}{str(number).zfill(remaining_digits)}"
