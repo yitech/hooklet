@@ -7,12 +7,11 @@ This emitter generates events with unique IDs at regular intervals.
 import asyncio
 import logging
 import uuid
-from datetime import datetime
-from hooklet.base import BasePilot
 
 from hooklet.eventrix.emitter import RouterEmitter
 
 logger = logging.getLogger(__name__)
+
 
 class ExampleRouterEmitter(RouterEmitter):
     """

@@ -5,6 +5,7 @@ from typing import Any
 from hooklet.base import BaseEventrix, BasePilot
 from hooklet.types import GeneratorFunc
 
+
 class Emitter(BaseEventrix, ABC):
     """
     Base class for event emitters.
@@ -75,7 +76,9 @@ class Emitter(BaseEventrix, ABC):
                     except asyncio.CancelledError:
                         self.logger.info(f"Generator for subject '{subject}' was cancelled.")
                     except Exception as e:
-                        self.logger.exception(f"Error in generator for subject '{subject}': {str(e)}")
+                        self.logger.exception(
+                            f"Error in generator for subject '{subject}': {str(e)}"
+                        )
 
                 task = asyncio.create_task(run_generator())
                 self._generator_tasks.append(task)
@@ -118,7 +121,9 @@ class RouterEmitter(Emitter, ABC):
     This abstract class provides the structure for emitting events.
     """
 
-    def __init__(self, pilot: BasePilot, subject: str, router_key: None | str, executor_id: None | str = None):
+    def __init__(
+        self, pilot: BasePilot, subject: str, router_key: None | str, executor_id: None | str = None
+    ):
         super().__init__(pilot, executor_id)
         self._subject = subject
         self._router_key = router_key
@@ -166,14 +171,19 @@ class RouterEmitter(Emitter, ABC):
                                 subject = f"{self._subject}.{data[self._router_key]}"
                                 router_value = data[self._router_key]
                                 del data[self._router_key]
-                                self.logger.debug(f"Routing to subject '{subject}' with router value: {router_value}")
+                                self.logger.debug(
+                                    f"Routing to subject '{subject}' "
+                                    f"with router value: {router_value}"
+                                )
                             else:
                                 subject = self._subject
                             await self.pilot.publish(subject, data)
                     except asyncio.CancelledError:
                         self.logger.info(f"Generator for subject '{self._subject}' was cancelled.")
                     except Exception as e:
-                        self.logger.exception(f"Error in generator for subject '{self._subject}': {str(e)}")
+                        self.logger.exception(
+                            f"Error in generator for subject '{self._subject}': {str(e)}"
+                        )
 
                 task = asyncio.create_task(run_generator())
                 self._generator_tasks.append(task)

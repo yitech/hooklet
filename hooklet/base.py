@@ -5,8 +5,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Callable
 
-from hooklet.types import MessageHandlerCallback
 from hooklet.logger import get_eventrix_logger
+from hooklet.types import MessageHandlerCallback
 from hooklet.utils import generate_id
 
 logger = logging.getLogger(__name__)
@@ -121,11 +121,13 @@ class BaseEventrix(ABC):
         """Notify all registered listeners for the given event."""
         if event not in self._event_listeners:
             return
-    
+
         for _, (callback, args, kwargs) in list(self._event_listeners[event].items()):
             try:
                 if asyncio.iscoroutinefunction(callback):
-                    await callback(*args, **kwargs)  # Using args and kwargs from storage, not passing the event
+                    await callback(
+                        *args, **kwargs
+                    )  # Using args and kwargs from storage, not passing the event
                 else:
                     callback(*args, **kwargs)  # Same here
             except Exception as e:
@@ -171,14 +173,14 @@ class BaseEventrix(ABC):
         started_dt = datetime.fromtimestamp(self._started_at / 1000)
         finished_dt = datetime.fromtimestamp(self._finished_at / 1000)
         elapsed_seconds = (finished_dt - started_dt).total_seconds()
-        
+
         self.logger.info(
             f"Executor {self._executor_id} finished",
             extra={
-                "start_time": started_dt.strftime('%d/%m/%Y, %H:%M:%S.%f'),
-                "finish_time": finished_dt.strftime('%d/%m/%Y, %H:%M:%S.%f'),
-                "elapsed_seconds": elapsed_seconds
-            }
+                "start_time": started_dt.strftime("%d/%m/%Y, %H:%M:%S.%f"),
+                "finish_time": finished_dt.strftime("%d/%m/%Y, %H:%M:%S.%f"),
+                "elapsed_seconds": elapsed_seconds,
+            },
         )
 
     async def stop(self) -> None:

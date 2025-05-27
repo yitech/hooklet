@@ -7,8 +7,8 @@ This emitter generates events with unique IDs at regular intervals.
 import asyncio
 import uuid
 from datetime import datetime
-from hooklet.base import BasePilot
 
+from hooklet.base import BasePilot
 from hooklet.eventrix.emitter import Emitter, RouterEmitter
 
 
@@ -45,12 +45,20 @@ class ExampleEmitter(Emitter):
         # Return a mapping of subjects to generator functions
         return {"example": example_generator}
 
+
 class ExampleRouterEmitter(RouterEmitter):
     """
     Example implementation of a RouterEmitter.
     Generates events with UUID identifiers once per second.
     """
-    def __init__(self, pilot: BasePilot, subject: str, router_key: None | str = None, executor_id: None | str = None):
+
+    def __init__(
+        self,
+        pilot: BasePilot,
+        subject: str,
+        router_key: None | str = None,
+        executor_id: None | str = None,
+    ):
         super().__init__(pilot, subject, router_key, executor_id)
 
     async def get_generators(self):
