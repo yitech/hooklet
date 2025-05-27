@@ -41,7 +41,7 @@ class EventrixLoggerAdapter(logging.LoggerAdapter):
         kwargs["extra"]["executor_id"] = self.executor_id
 
         # Add executor context to message for non-JSON formats
-        return f"[Executor: {self.executor_id}] {msg}", kwargs
+        return f" {msg}", kwargs
 
 
 def get_eventrix_logger(
