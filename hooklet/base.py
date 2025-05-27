@@ -131,7 +131,7 @@ class BaseEventrix(ABC):
                 else:
                     callback(*args, **kwargs)  # Same here
             except Exception as e:
-                self.logger.error(f"Listener error: {e}", exc_info=e)
+                self.logger.error(f"Listener error: {e}", exc_info=True)
 
     async def start(self) -> None:
         self.logger.info(f"Starting executor with ID {self._executor_id}")
