@@ -24,6 +24,10 @@ dependencies = [
     "pyzmq>=26.4.0"
 ]
 
+[tool.setuptools]
+packages = ["hooklet"]
+exclude = ["logs*"]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
