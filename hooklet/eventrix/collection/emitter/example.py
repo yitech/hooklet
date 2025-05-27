@@ -5,14 +5,11 @@ This emitter generates events with unique IDs at regular intervals.
 
 # pylint: disable=R0801
 import asyncio
-import logging
 import uuid
 from datetime import datetime
 from hooklet.base import BasePilot
 
 from hooklet.eventrix.emitter import Emitter, RouterEmitter
-
-logger = logging.getLogger(__name__)
 
 
 class ExampleEmitter(Emitter):
@@ -41,7 +38,7 @@ class ExampleEmitter(Emitter):
                 }
 
                 await asyncio.sleep(1)  # Emit every second
-                logger.info(f"Emitting event: {event['id']} (#{counter})")
+                self.logger.info(f"Emitting event: {event['id']} (#{counter})")
                 counter += 1
                 yield event
 
@@ -76,7 +73,7 @@ class ExampleRouterEmitter(RouterEmitter):
                 }
 
                 await asyncio.sleep(1)  # Emit every second
-                logger.info(f"Emitting event: {event['id']} (#{counter})")
+                self.logger.info(f"Emitting event: {event['id']} (#{counter})")
                 counter += 1
                 yield event
 

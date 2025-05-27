@@ -14,6 +14,8 @@ from .hooklet_logger import (
     log_performance,
 )
 
+from .eventrix_logger import get_eventrix_logger
+
 __all__ = [
     'LogLevel',
     'LogFormat',
@@ -22,6 +24,7 @@ __all__ = [
     'get_logger',
     'configure_logging',
     'log_performance',
+    'get_eventrix_logger',
 ]
 
 # Default logger instance for convenience

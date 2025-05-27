@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from hooklet.types import MessageHandlerCallback
+from hooklet.logger import get_eventrix_logger
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,9 @@ class BaseEventrix(ABC):
         self.pilot = pilot
         self._executor_id = executor_id or str(uuid.uuid4())
 
+        # Initialize logger with executor context
+        self.logger = get_eventrix_logger(self._executor_id)
+
         self._task: asyncio.Task | None = None
         self._created_at: int = int(time.time() * 1000)  # milliseconds
         self._started_at: int = 0
@@ -125,10 +129,10 @@ class BaseEventrix(ABC):
                 else:
                     callback(*args, **kwargs)  # Same here
             except Exception as e:
-                logger.error(f"Listener error: {e}")
+                self.logger.error(f"Listener error: {e}", exc_info=e)
 
     async def start(self) -> None:
-        logger.info(f"Starting executor with ID {self._executor_id}")
+        self.logger.info(f"Starting executor with ID {self._executor_id}")
 
         if not self.pilot.is_connected():
             await self.pilot.connect()
@@ -139,7 +143,7 @@ class BaseEventrix(ABC):
 
         task = asyncio.create_task(self._run_executor())
         if self._task:
-            logger.warning(
+            self.logger.warning(
                 f"Executor {self._executor_id} is already running. "
                 f"Stopping the previous task before starting a new one."
             )
@@ -153,7 +157,7 @@ class BaseEventrix(ABC):
         try:
             await self.on_execute()
         except Exception as e:
-            logger.error(f"Executor {self._executor_id} failed: {str(e)}")
+            self.logger.error(f"Executor {self._executor_id} failed: {str(e)}", exc_info=e)
             await self.on_error(e)  # Optional error handling
             await self._notify("error")
             raise
@@ -166,11 +170,15 @@ class BaseEventrix(ABC):
         self._finished_at = int(time.time() * 1000)
         started_dt = datetime.fromtimestamp(self._started_at / 1000)
         finished_dt = datetime.fromtimestamp(self._finished_at / 1000)
-        logging.info(
-            f"Executor {self._executor_id} finished. "
-            f"Start At: {started_dt.strftime('%d/%m/%Y, %H:%M:%S.%f')}, "
-            f"Finish At: {finished_dt.strftime('%d/%m/%Y, %H:%M:%S.%f')}, "
-            f"Running elapse = {(finished_dt - started_dt).total_seconds()} seconds"
+        elapsed_seconds = (finished_dt - started_dt).total_seconds()
+        
+        self.logger.info(
+            f"Executor {self._executor_id} finished",
+            extra={
+                "start_time": started_dt.strftime('%d/%m/%Y, %H:%M:%S.%f'),
+                "finish_time": finished_dt.strftime('%d/%m/%Y, %H:%M:%S.%f'),
+                "elapsed_seconds": elapsed_seconds
+            }
         )
 
     async def stop(self) -> None:
@@ -178,8 +186,9 @@ class BaseEventrix(ABC):
         Stop the executor.
         This method sets the stop event and allows the executor to finish its current task.
         """
-        logger.info(f"Stopping executor with ID {self._executor_id}")
-        self._task.cancel()
+        self.logger.info(f"Stopping executor with ID {self._executor_id}")
+        if self._task:
+            self._task.cancel()
         await self.on_stop()
 
     @property
