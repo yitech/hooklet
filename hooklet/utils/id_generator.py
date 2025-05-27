@@ -24,6 +24,7 @@ WORDS = [
     "pig",
 ]
 
+
 def generate_id() -> str:
     """Generate an ID with a word followed by numbers, always 6 characters total.
 
@@ -32,5 +33,5 @@ def generate_id() -> str:
     """
     word = random.choice(WORDS)
     remaining_digits = 6 - len(word)
-    number = random.randint(0, 10 ** remaining_digits - 1)
+    number = random.randint(0, 10**remaining_digits - 1)
     return f"{word}{str(number).zfill(remaining_digits)}"
