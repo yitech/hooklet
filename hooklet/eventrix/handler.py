@@ -1,12 +1,9 @@
 import asyncio
-import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
 from hooklet.base import BaseEventrix, BasePilot
 from hooklet.types import MessageHandlerCallback
-
-logger = logging.getLogger(__name__)
 
 
 class Handler(BaseEventrix, ABC):
@@ -87,11 +84,11 @@ class Handler(BaseEventrix, ABC):
                     if subject not in self._registered_handlers:
                         self._registered_handlers[subject] = []
                     self._registered_handlers[subject].append(handler_id)
-                    logger.debug(f"Registered handler for {subject} with ID {handler_id}")
+                    self.logger.debug(f"Registered handler for {subject} with ID {handler_id}")
                 except Exception as e:
-                    logger.error(f"Failed to register handler for {subject}: {str(e)}")
+                    self.logger.error(f"Failed to register handler for {subject}: {str(e)}")
         except Exception as e:
-            logger.error(f"Error in handler {self.executor_id}: {str(e)}", exc_info=True)
+            self.logger.error(f"Error in handler {self.executor_id}: {str(e)}", exc_info=True)
             raise
 
     async def _unregister_handlers(self) -> None:
@@ -107,23 +104,23 @@ class Handler(BaseEventrix, ABC):
                         result = await self.pilot.unregister_handler(handler_id)
                         # If result is a boolean and False, log a warning
                         if result is False:
-                            logger.warning(
+                            self.logger.warning(
                                 f"Failed to unregister handler {handler_id} from {subject}"
                             )
                         else:
                             # Success or None return value (assume success)
-                            logger.debug(f"Unregistered handler {handler_id} from {subject}")
+                            self.logger.debug(f"Unregistered handler {handler_id} from {subject}")
                     except Exception as e:
                         # Check if this is a connection closed error
                         if "connection closed" in str(e).lower():
-                            logger.debug(
+                            self.logger.debug(
                                 "Connection already closed while unregistering "
                                 f"handler {handler_id}."
                                 "This is normal during shutdown."
                             )
                         else:
-                            logger.error(f"Error unregistering handler {handler_id}: {str(e)}")
+                            self.logger.error(f"Error unregistering handler {handler_id}: {str(e)}")
             self._registered_handlers.clear()
         except Exception as e:
-            logger.error(f"Error in strategy {self.executor_id}: {str(e)}")
+            self.logger.error(f"Error in strategy {self.executor_id}: {str(e)}")
             raise
