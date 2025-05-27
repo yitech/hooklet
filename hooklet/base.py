@@ -1,13 +1,13 @@
 import asyncio
 import logging
 import time
-import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Callable
 
 from hooklet.types import MessageHandlerCallback
 from hooklet.logger import get_eventrix_logger
+from hooklet.utils import generate_id
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class BaseEventrix(ABC):
 
     def __init__(self, pilot: BasePilot, executor_id: None | str = None):
         self.pilot = pilot
-        self._executor_id = executor_id or str(uuid.uuid4())
+        self._executor_id = executor_id or generate_id()
 
         # Initialize logger with executor context
         self.logger = get_eventrix_logger(self._executor_id)
@@ -104,7 +104,7 @@ class BaseEventrix(ABC):
         self, event: str, callback: Callable[..., None], *args: Any, **kwargs: Any
     ) -> None:
         """Register a callback with optional arguments."""
-        listener_id = str(uuid.uuid4())
+        listener_id = generate_id()
         if event not in self._event_listeners:
             raise ValueError(f"Event '{event}' is not supported.")
         self._event_listeners[event][listener_id] = (callback, args, kwargs)
