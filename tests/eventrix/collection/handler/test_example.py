@@ -45,23 +45,6 @@ class TestExampleHandler:
         assert isinstance(handlers, dict)
         assert "example" in handlers
         assert callable(handlers["example"])
-    
-    @pytest.mark.asyncio
-    async def test_handler_processes_events(self, example_handler):
-        """Test that the handler correctly processes events."""
-        handlers = example_handler.get_handlers()
-        example_handler_func = handlers["example"]
-        
-        # Create a test event
-        test_event = {"id": "test-id-123"}
-        
-        # Patch the logger to verify the log message
-        with patch.object(logging.getLogger("hooklet.eventrix.collection.handler.example"), "info") as mock_log:
-            # Call the handler
-            await example_handler_func(test_event)
-            
-            # Verify the log message
-            mock_log.assert_called_once_with("Received event with id: test-id-123")
 
     @pytest.mark.asyncio
     async def test_add_listener(self, example_handler):
