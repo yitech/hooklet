@@ -3,7 +3,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from hooklet.logger import get_eventrix_logger
 from hooklet.types import MessageHandlerCallback
@@ -101,7 +101,7 @@ class BaseEventrix(ABC):
         return self._executor_id
 
     def add_listener(
-        self, event: str, callback: Callable[..., None], *args: Any, **kwargs: Any
+        self, event: Literal["start", "error", "finish"], callback: Callable[..., None], *args: Any, **kwargs: Any
     ) -> None:
         """Register a callback with optional arguments."""
         listener_id = generate_id()
@@ -110,7 +110,7 @@ class BaseEventrix(ABC):
         self._event_listeners[event][listener_id] = (callback, args, kwargs)
         return listener_id
 
-    def remove_listener(self, event: str, listener_id: str) -> bool:
+    def remove_listener(self, event: Literal["start", "error", "finish"], listener_id: str) -> bool:
         """Remove a listener by its ID. Returns True if removed."""
         if event in self._event_listeners and listener_id in self._event_listeners[event]:
             del self._event_listeners[event][listener_id]
