@@ -72,7 +72,7 @@ class Emitter(BaseEventrix, ABC):
                 async def run_generator(subject=subject, generator=generator):
                     try:
                         async for data in generator():
-                            await self.pilot.publish(subject, data)
+                            await self.pilot._publish(subject, data)
                     except asyncio.CancelledError:
                         self.logger.info(f"Generator for subject '{subject}' was cancelled.")
                     except Exception as e:
@@ -177,7 +177,7 @@ class RouterEmitter(Emitter, ABC):
                                 )
                             else:
                                 subject = self._subject
-                            await self.pilot.publish(subject, data)
+                            await self.pilot._publish(subject, data)
                     except asyncio.CancelledError:
                         self.logger.info(f"Generator for subject '{self._subject}' was cancelled.")
                     except Exception as e:

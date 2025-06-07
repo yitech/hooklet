@@ -189,7 +189,7 @@ class NatsPilot(BasePilot):
             logger.warning(f"Handler '{handler_id}' not found")
         return found
 
-    async def publish(self, subject: str, data: Any) -> None:
+    async def _publish(self, subject: str, data: Any) -> None:
         """
         Publish a message to a subject.
 
@@ -207,7 +207,7 @@ class NatsPilot(BasePilot):
         encoded_data = json.dumps(data).encode()
 
         # Publish to NATS
-        await self.nc.publish(subject, encoded_data)
+        await self.nc._publish(subject, encoded_data)
         logger.debug(f"Published message to '{subject}'")
 
     def get_registered_handlers(self) -> Dict[str, List[str]]:

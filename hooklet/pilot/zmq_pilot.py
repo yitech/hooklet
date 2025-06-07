@@ -212,7 +212,7 @@ class ZmqPilot(BasePilot):
 
         return removed
 
-    async def publish(self, subject: str, data: Any) -> None:
+    async def _publish(self, subject: str, data: Any) -> None:
         if not self._connected:
             await self.connect()
 

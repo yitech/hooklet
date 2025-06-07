@@ -126,7 +126,7 @@ class TestInProcPilot:
         handler = AsyncMock()
         
         await connected_pilot.register_handler("test_subject", handler)
-        await connected_pilot.publish("test_subject", test_data)
+        await connected_pilot._publish("test_subject", test_data)
         
         # Wait a bit for the message to be processed
         await asyncio.sleep(0.1)
@@ -143,7 +143,7 @@ class TestInProcPilot:
         
         await connected_pilot.register_handler("test_subject", handler1, "handler1")
         await connected_pilot.register_handler("test_subject", handler2, "handler2")
-        await connected_pilot.publish("test_subject", test_data)
+        await connected_pilot._publish("test_subject", test_data)
         
         # Wait a bit for the message to be processed
         await asyncio.sleep(0.1)
@@ -162,7 +162,7 @@ class TestInProcPilot:
         await connected_pilot.register_handler("other_subject", handler)
         
         # Publish to a subject with no handlers
-        await connected_pilot.publish("test_subject", test_data)
+        await connected_pilot._publish("test_subject", test_data)
         
         # Wait a bit, but the handler should not be called
         await asyncio.sleep(0.1)
@@ -179,7 +179,7 @@ class TestInProcPilot:
         await connected_pilot.register_handler("test_subject", normal_handler, "normal_handler")
         
         with patch("hooklet.pilot.inproc_pilot.logger.error") as mock_error:
-            await connected_pilot.publish("test_subject", test_data)
+            await connected_pilot._publish("test_subject", test_data)
             # Wait for processing
             await asyncio.sleep(0.1)
             
@@ -197,7 +197,7 @@ class TestInProcPilot:
         assert not inproc_pilot.is_connected()
         
         await inproc_pilot.register_handler("test_subject", handler)
-        await inproc_pilot.publish("test_subject", test_data)
+        await inproc_pilot._publish("test_subject", test_data)
         
         assert inproc_pilot.is_connected()
         

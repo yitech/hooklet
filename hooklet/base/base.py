@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
+from deprecated import deprecated
 from datetime import datetime
 from typing import Any, Callable, Literal
 
@@ -60,12 +61,16 @@ class BasePilot(ABC):
         raise NotImplementedError("Subclasses must implement unregister_handler()")
 
     @abstractmethod
-    async def publish(self, subject: str, data: Any) -> None:
+    @deprecated("_publish is a deprecated method, use publish instead")
+    async def _publish(self, subject: str, data: Any) -> None:
         """
         Publish data to a specific subject.
         This method should be implemented by subclasses to publish the data.
         """
-        raise NotImplementedError("Subclasses must implement publish()")
+        raise NotImplementedError("Subclasses must implement _publish()")
+    
+    
+    
 
 
 class BaseEventrix(ABC):
@@ -208,7 +213,7 @@ class BaseEventrix(ABC):
             "status": "running" if self._started_at and not self._finished_at else "stopped",
         }
 
-    async def publish(self, subject: str, data: Any) -> None:
+    async def _publish(self, subject: str, data: Any) -> None:
         """
         Publish data to the configured subject.
 
@@ -219,7 +224,7 @@ class BaseEventrix(ABC):
         if not self.pilot.is_connected():
             await self.pilot.connect()
 
-        await self.pilot.publish(subject, data)
+        await self.pilot._publish(subject, data)
 
     @abstractmethod
     async def on_execute(self) -> None:

@@ -74,7 +74,7 @@ class InProcPilot(BasePilot):
             logger.warning(f"Handler {handler_id} not found for unregistration")
         return removed
 
-    async def publish(self, subject: str, data: Any) -> None:
+    async def _publish(self, subject: str, data: Any) -> None:
         if not self.is_connected():
             await self.connect()
         await self._queue.put((subject, data))

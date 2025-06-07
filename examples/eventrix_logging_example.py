@@ -34,7 +34,7 @@ class MockPilot(BasePilot):
     async def unregister_handler(self, handler_id: str) -> bool:
         return True
     
-    async def publish(self, subject: str, data: Any) -> None:
+    async def _publish(self, subject: str, data: Any) -> None:
         pass
 
 
@@ -55,7 +55,7 @@ class ExampleEventrix(BaseEventrix):
             self.logger.info(f"Processing step {i+1}/{self.duration}")
             
             # Simulate some work and publish a message
-            await self.publish("test.subject", {"step": i+1, "timestamp": time.time()})
+            await self._publish("test.subject", {"step": i+1, "timestamp": time.time()})
             
             await asyncio.sleep(1)
     
