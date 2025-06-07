@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Callable, Literal
 
 from hooklet.logger import get_eventrix_logger
-from hooklet.types import MessageHandlerCallback
+from hooklet.types import MessageHandlerCallback, Event
 from hooklet.utils import generate_id
 
 logger = logging.getLogger(__name__)
@@ -69,8 +69,13 @@ class BasePilot(ABC):
         """
         raise NotImplementedError("Subclasses must implement _publish()")
     
-    
-    
+    @abstractmethod
+    async def publish(self, event: Event) -> None:
+        """
+        Publish an event to the NATS server.
+        This method should be implemented by subclasses to publish the event.
+        """
+        raise NotImplementedError("Subclasses must implement publish()")
 
 
 class BaseEventrix(ABC):
@@ -250,3 +255,19 @@ class BaseEventrix(ABC):
 
     async def on_error(self, exception: Exception) -> None:
         """OPTIONAL: Override to handle execution errors."""
+
+
+class BaseNode(ABC):
+    def __init__(self, pilot: BasePilot, sources: list[str], targets: list[str], node_id: None | str = None):
+        self.pilot = pilot
+        self.sources = sources
+        self.targets = targets
+        self.node_id = node_id or generate_id()
+        
+    @abstractmethod
+    async def on_event(self, event: Event) -> Event | None:
+        """
+        Handle an event.
+        This method should be implemented by subclasses to handle the event.
+        """
+        

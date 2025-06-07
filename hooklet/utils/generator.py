@@ -35,3 +35,5 @@ def generate_id() -> str:
     remaining_digits = 6 - len(word)
     number = random.randint(0, 10**remaining_digits - 1)
     return f"{word}{str(number).zfill(remaining_digits)}"
+
+    
