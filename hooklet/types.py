@@ -16,5 +16,5 @@ class HookletMessage(BaseModel):
     start_at: int | None = None
     finish_at: int | None = None
 
-
-
+HookletGenerator = Callable[[], AsyncIterator[HookletMessage]]
+HandlerHandler = Callable[[HookletMessage], AsyncIterator[HookletMessage]]
