@@ -207,7 +207,7 @@ class NatsPilot(BasePilot):
         encoded_data = json.dumps(data).encode()
 
         # Publish to NATS
-        await self.nc._publish(subject, encoded_data)
+        await self.nc.publish(subject, encoded_data)
         logger.debug(f"Published message to '{subject}'")
 
     def get_registered_handlers(self) -> Dict[str, List[str]]:
