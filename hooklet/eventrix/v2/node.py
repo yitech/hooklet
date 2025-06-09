@@ -23,6 +23,10 @@ class Node(BaseEventrix, ABC):
     def node_id(self) -> str:
         return self._executor_id
     
+    @property
+    def is_running(self) -> bool:
+        return not self._shutdown_event.is_set()
+    
     async def generator_func(self) -> AsyncIterator[HookletMessage]:
         """
         Default generator function that yields nothing.
