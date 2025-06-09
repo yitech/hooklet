@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 
 from hooklet.base import BasePilot
-from hooklet.eventrix.emitter import Emitter, RouterEmitter
+from hooklet.eventrix.v1.emitter import Emitter, RouterEmitter
 
 
 class ExampleEmitter(Emitter):

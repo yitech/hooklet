@@ -1,13 +1,15 @@
 """
-Example emitter implementation.
+Example router emitter implementation.
 This emitter generates events with unique IDs at regular intervals.
 """
 
 # pylint: disable=R0801
 import asyncio
 import uuid
+from datetime import datetime
 
-from hooklet.eventrix.emitter import RouterEmitter
+from hooklet.base import BasePilot
+from hooklet.eventrix.v1.emitter import RouterEmitter
 
 
 class ExampleRouterEmitter(RouterEmitter):

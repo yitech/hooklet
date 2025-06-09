@@ -1,4 +1,4 @@
-from hooklet.eventrix.handler import Handler
+from hooklet.eventrix.v1.handler import Handler
 
 
 class ExampleRouterHandler(Handler):
