@@ -2,12 +2,13 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from deprecated import deprecated
 from datetime import datetime
 from typing import Any, Callable, Literal
 
+from deprecated import deprecated
+
 from hooklet.logger import get_eventrix_logger
-from hooklet.types import MessageHandlerCallback, HookletMessage
+from hooklet.types import HookletMessage, MessageHandlerCallback
 from hooklet.utils import generate_id
 
 logger = logging.getLogger(__name__)
@@ -68,9 +69,9 @@ class BasePilot(ABC):
         This method should be implemented by subclasses to publish the data.
         """
         raise NotImplementedError("Subclasses must implement _publish()")
-    
+
     @abstractmethod
-    async def publish(self, event: Event) -> None:
+    async def publish(self, event: HookletMessage) -> None:
         """
         Publish an event to the NATS server.
         This method should be implemented by subclasses to publish the event.
@@ -111,7 +112,11 @@ class BaseEventrix(ABC):
         return self._executor_id
 
     def add_listener(
-        self, event: Literal["start", "error", "finish"], callback: Callable[..., None], *args: Any, **kwargs: Any
+        self,
+        event: Literal["start", "error", "finish"],
+        callback: Callable[..., None],
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """Register a callback with optional arguments."""
         listener_id = generate_id()
@@ -255,4 +260,3 @@ class BaseEventrix(ABC):
 
     async def on_error(self, exception: Exception) -> None:
         """OPTIONAL: Override to handle execution errors."""
-

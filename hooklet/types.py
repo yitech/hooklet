@@ -1,7 +1,9 @@
-from typing import Any, AsyncIterator, Awaitable, Callable, Optional
-from pydantic import BaseModel, Field
-import time
 import random
+import time
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional
+
+from pydantic import BaseModel, Field
+
 
 class HookletMessage(BaseModel):
     id: int = Field(default_factory=lambda: random.randint(1, 10**6 - 1))
@@ -16,4 +18,4 @@ class HookletMessage(BaseModel):
 MessageHandlerCallback = Callable[[Any], Awaitable[Any]]
 GeneratorFunc = Callable[[], AsyncIterator[dict[str, Any]]]
 
-EventHandlerCallback =  Callable[[HookletMessage], AsyncIterator[HookletMessage]]
+EventHandlerCallback = Callable[[HookletMessage], AsyncIterator[HookletMessage]]

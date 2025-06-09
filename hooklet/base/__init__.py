@@ -1,3 +1,3 @@
-from .base import BasePilot, BaseEventrix
+from .base import BaseEventrix, BasePilot
 
 __all__ = ["BasePilot", "BaseEventrix"]
