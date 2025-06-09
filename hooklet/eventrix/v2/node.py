@@ -2,10 +2,13 @@ import asyncio
 import time
 import uuid
 from abc import ABC
-from typing import AsyncIterator, Callable
+from typing import AsyncIterator, AsyncGenerator, Callable, TypeVar
+from functools import wraps
 
 from hooklet.base import BaseEventrix, BasePilot
 from hooklet.types import HookletMessage
+
+T = TypeVar('T')
 
 
 class Node(BaseEventrix, ABC):
@@ -42,6 +45,7 @@ class Node(BaseEventrix, ABC):
         Override this method to provide custom generator behavior.
         """
         yield
+
 
     async def handler_func(self, message: HookletMessage) -> AsyncIterator[HookletMessage]:
         """
