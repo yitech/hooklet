@@ -35,8 +35,7 @@ class ExampleSinker(Node):
         if "name" in message.payload:
             name = message.payload["name"]
             response = HookletMessage(
-                id=uuid.uuid4(),
-                correlation_id=message.id,
+                correlation_id=message.correlation_id,
                 type="response",
                 payload={"greeting": f"Hello, {name}!"},
             )

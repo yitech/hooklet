@@ -59,8 +59,8 @@ class Node(BaseEventrix, ABC):
                 message.node_id = self.node_id
                 message.start_at = int(time.time() * 1000)
                 subject = self.router(message)
+                message.finish_at = int(time.time() * 1000)
                 if subject is not None:
-                    message.finish_at = int(time.time() * 1000)
                     await self.pilot.publish(subject, message.model_dump_json())
         except Exception as e:
             self.logger.error(f"Error in generator: {e}")
@@ -77,14 +77,13 @@ class Node(BaseEventrix, ABC):
             async for processed_message in self.handler_func(message):
                 processed_message.id = uuid.uuid4()
                 processed_message.node_id = self.node_id
-                processed_message.start_at = int(time.time() * 1000)
-                if processed_message is not None:
-                    subject = self.router(processed_message)
-                    processed_message.finish_at = int(time.time() * 1000)
+                subject = self.router(processed_message)
+                processed_message.finish_at = int(time.time() * 1000)
+                if subject is not None:
                     await self.pilot.publish(subject, processed_message.model_dump_json())
         except Exception as e:
             self.logger.error(f"Error processing message in {self.node_id}: {e}")
-            self.on_error(e)
+            await self.on_error(e)
 
     async def _register_handlers(self) -> None:
         """
