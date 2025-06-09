@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Callable, Literal
 
 from hooklet.logger import get_eventrix_logger
-from hooklet.types import MessageHandlerCallback, Event
+from hooklet.types import MessageHandlerCallback, HookletMessage
 from hooklet.utils import generate_id
 
 logger = logging.getLogger(__name__)
@@ -255,45 +255,4 @@ class BaseEventrix(ABC):
 
     async def on_error(self, exception: Exception) -> None:
         """OPTIONAL: Override to handle execution errors."""
-
-
-class BaseVertex(ABC):
-    def __init__(self, pilot: BasePilot, sources: list[str], targets: list[str], vertex_id: None | str = None):
-        self.pilot = pilot
-        self.sources = sources
-        self.targets = targets
-        self.vertex_id = vertex_id or generate_id()
-        
-    @abstractmethod
-    async def on_event(self, event: Event) -> Event | None:
-        """
-        Handle an event.
-        This method should be implemented by subclasses to handle the event.
-        """
-
-    @abstractmethod
-    async def on_stop(self) -> None:
-        """stop hook."""
-        raise NotImplementedError("Subclasses must implement on_stop()")
-
-    @abstractmethod
-    async def on_start(self) -> None:
-        """startup hook."""
-        raise NotImplementedError("Subclasses must implement on_start()")
-
-    @abstractmethod
-    async def on_finish(self) -> None:
-        """finish hook."""
-        raise NotImplementedError("Subclasses must implement on_finish()")
-
-    async def on_error(self, exception: Exception) -> None:
-        """OPTIONAL: Override to handle execution errors."""
-    
-    async def _run_vertex(self) -> None:
-        """
-        Run the vertex.
-        This method should be implemented by subclasses to run the vertex.
-        """
-        
-
 
