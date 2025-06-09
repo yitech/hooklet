@@ -4,10 +4,8 @@ This sink node sinks events to stdout.
 """
 
 # pylint: disable=R0801
-import asyncio
-from typing import AsyncIterator, Callable
 import uuid
-from datetime import datetime
+from typing import AsyncIterator, Callable
 
 from hooklet.base import BasePilot
 from hooklet.eventrix.v2.node import Node
@@ -20,9 +18,15 @@ class ExampleSinker(Node):
     Sinks events to stdout.
     """
 
-    def __init__(self, pilot: BasePilot, sources: list[str], router: Callable[[HookletMessage], str | None], node_id: None | str = None):
+    def __init__(
+        self,
+        pilot: BasePilot,
+        sources: list[str],
+        router: Callable[[HookletMessage], str | None],
+        node_id: None | str = None,
+    ):
         super().__init__(pilot, sources, router, node_id)
-    
+
     async def handler_func(self, message: HookletMessage) -> AsyncIterator[HookletMessage]:
         """
         Handler function that sinks events to stdout.
