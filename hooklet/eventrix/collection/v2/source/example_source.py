@@ -31,8 +31,9 @@ class ExampleSource(Node):
             message = HookletMessage(
                 correlation_id=str(uuid.uuid4()),
                 type="example",
-                payload={"message": "Hello, world!"},
+                payload={"name": "John Doe"},
             )
+            self.logger.info(f"Generated message {message}")
             yield message
             await asyncio.sleep(1)
     

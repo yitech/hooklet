@@ -47,10 +47,12 @@ class Node(BaseEventrix, ABC):
         """
         try:
             async for message in self.generator_func():
-                self.pilot.publish(self.router(message), message)
+                subject = self.router(message)
+                if subject is not None:
+                    await self.pilot.publish(subject, message.model_dump_json())
         except Exception as e:
             self.logger.error(f"Error in generator: {e}")
-            self.on_error(e)
+            await self.on_error(e)
         finally:
             self.logger.info(f"Generator {self.node_id} finished")
     
@@ -64,7 +66,7 @@ class Node(BaseEventrix, ABC):
             async for processed_message in self.handler_func(message):
                 if processed_message is not None:
                     subject = self.router(processed_message)
-                    self.pilot.publish(subject, processed_message.model_dump_json())
+                    await self.pilot.publish(subject, processed_message.model_dump_json())
         except Exception as e:
             self.logger.error(f"Error processing message in {self.node_id}: {e}")
             self.on_error(e)
@@ -75,7 +77,7 @@ class Node(BaseEventrix, ABC):
         """
         try:
             for source in self.sources:
-                self.pilot.register_handler(source, self._message_handler)
+                await self.pilot.register_handler(source, self._message_handler)
         except Exception as e:
             self.logger.error(f"Error in handler {self.node_id}: {str(e)}", exc_info=True)
             raise
@@ -95,11 +97,8 @@ class Node(BaseEventrix, ABC):
         self.logger.info(f"Executing node {self.node_id}")
         if self._generator_task:
             self._generator_task.cancel()
-        self._generator_task = asyncio.create_task(self._get_generator())
-        if self._handler_task:
-            self._handler_task.cancel()
-        self._handler_task = asyncio.create_task(self._get_handler(self._generator_task))
-        self._shutdown_event.wait()
+        self._generator_task = asyncio.create_task(self._run_generator())
+        await self._shutdown_event.wait()
     
     async def on_stop(self) -> None:
         """
@@ -109,8 +108,6 @@ class Node(BaseEventrix, ABC):
         self._shutdown_event.set()
         if self._generator_task:
             self._generator_task.cancel()
-        if self._handler_task:
-            self._handler_task.cancel()
         self.logger.info(f"Node {self.node_id} stopped")
     
     async def on_finish(self) -> None:
@@ -121,8 +118,6 @@ class Node(BaseEventrix, ABC):
         self._shutdown_event.set()
         if self._generator_task:
             self._generator_task.cancel()
-        if self._handler_task:
-            self._handler_task.cancel()
         self.logger.info(f"Node {self.node_id} finished")
     
     async def on_error(self, error: Exception) -> None:
