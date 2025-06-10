@@ -44,15 +44,16 @@ class Node(BaseEventrix, ABC):
         Default generator function that yields nothing.
         Override this method to provide custom generator behavior.
         """
-        yield
-
+        if False:  # This ensures the function is treated as an async generator
+            yield None
 
     async def handler_func(self, message: HookletMessage) -> AsyncIterator[HookletMessage]:
         """
         Default handler function that returns the input message unchanged.
         Override this method to provide custom handler behavior.
         """
-        yield
+        if False:  # This ensures the function is treated as an async generator
+            yield None
 
     async def _run_generator(self) -> None:
         """
