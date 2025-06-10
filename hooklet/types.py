@@ -15,7 +15,7 @@ class HookletMessage(BaseModel):
     correlation_id: int = Field(default_factory=lambda: random.randint(0, 2**64 - 1))
     type: str | None = None
     payload: Any
-    start_at: int = Field(default_factory=lambda: int(time.time()) * 1000)
+    start_at: int = Field(default_factory=lambda: int(time.time() * 1000))
     finish_at: int = Field(default_factory=lambda: -1)
 
 
