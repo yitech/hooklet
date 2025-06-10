@@ -61,3 +61,6 @@ data/
 *.json
 *.yaml
 *.yml
+
+# pypirc
+.pypirc
