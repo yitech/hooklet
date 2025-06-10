@@ -7,7 +7,7 @@ This emitter generates events with unique IDs at regular intervals.
 import asyncio
 import uuid
 
-from hooklet.eventrix.emitter import RouterEmitter
+from hooklet.eventrix.v1.emitter import RouterEmitter
 
 
 class ExampleRouterEmitter(RouterEmitter):

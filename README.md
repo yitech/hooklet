@@ -1,101 +1,173 @@
-# hooklet
+# Hooklet v2
 
-An asynchronous, event-driven Python framework for developing applications with NATS messaging system(expected to support more in the future). This framework leverages Python's async/await features and NATS to create a flexible, extensible event driven class.
+Hooklet is an event-driven framework that enables building distributed systems using a source-sink architecture. The v2 version introduces a more robust and flexible implementation with improved message routing and handling capabilities.
 
-## Installation
+## Architecture
 
-### From PyPI
+### Core Components
 
-```bash
-pip install hooklet
-```
+1. **Node**
+   - Base class for all nodes in the system
+   - Handles message routing, generation, and processing
+   - Manages lifecycle events (start, execute, stop, finish)
+   - Supports both source and sink functionality
 
-### From Source
+2. **Source**
+   - Generates events and publishes them to the message bus
+   - Implements `generator_func()` to produce messages
+   - Uses a router function to determine message destinations
 
-```bash
-git clone https://github.com/yitech/hooklet.git
-cd hooklet
-pip install -e .
-```
+3. **Sinker**
+   - Consumes events from specified sources
+   - Implements `handler_func()` to process incoming messages
+   - Can generate new messages in response to received events
 
-## Quick Start
+4. **Pilot**
+   - Manages the underlying message transport (e.g., NATS)
+   - Handles message publishing and subscription
+   - Provides connection management
+
+### Message Flow
+
+1. Sources generate messages using their `generator_func()`
+2. Messages are routed using the provided router function
+3. Sinkers receive messages from their subscribed sources
+4. Sinkers process messages using their `handler_func()`
+5. Processed messages can be routed to other destinations
+
+## Usage
+
+### Basic Example
 
 ```python
-#!/usr/bin/env python3
-"""
-Run both ExampleEmitter and ExampleHandler in a single script.
-"""
-
 import asyncio
-import logging
-import signal
-from hooklet.eventrix.collection import ExampleEmitter, ExampleHandler
+from hooklet.eventrix.collection.v2.source import ExampleSource
+from hooklet.eventrix.collection.v2.sinker import ExampleSinker
 from hooklet.pilot import NatsPilot
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-async def handle_shutdown(shutdown_event):
-    """Handle graceful shutdown when SIGINT is received."""
-    logger.info("Shutting down...")
-    shutdown_event.set()
-
 async def main():
+    # Initialize the message transport
     nats_pilot = NatsPilot()
     await nats_pilot.connect()
 
-    emitter = ExampleEmitter(pilot=nats_pilot)
-    handler = ExampleHandler(pilot=nats_pilot)
+    # Create a source that generates events
+    source = ExampleSource(
+        pilot=nats_pilot,
+        router=lambda e: "example"  # Route all messages to "example" subject
+    )
 
-    # Run both emitter and handler concurrently
-    await emitter.start()
-    await handler.start()
+    # Create a sinker that processes events
+    sinker = ExampleSinker(
+        pilot=nats_pilot,
+        sources=["example"],  # Subscribe to "example" subject
+        router=lambda e: None  # No further routing needed
+    )
+
+    # Start both components
+    await source.start()
+    await sinker.start()
 
     try:
-        logger.info("ExampleEmitter and ExampleHandler are running. Press Ctrl+C to stop.")
-        # Create an event for clean shutdown
-        shutdown_event = asyncio.Event()
-        
-        # Set up a signal handler for keyboard interrupt
-        loop = asyncio.get_running_loop()
-        loop.add_signal_handler(
-            signal.SIGINT,
-            lambda: asyncio.create_task(handle_shutdown(shutdown_event))
-        )
-        
-        # Wait until shutdown is triggered
-        await shutdown_event.wait()
-        
-    except asyncio.CancelledError:
-        logger.info("Task was cancelled, shutting down...")
+        # Keep the application running
+        await asyncio.Event().wait()
     finally:
-        # First, stop both components
-        await emitter.stop()
-        await handler.stop()
-
-        # Finally close the NATS connection
+        # Clean shutdown
+        await source.stop()
+        await sinker.stop()
         await nats_pilot.close()
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        # This captures the KeyboardInterrupt at the top level
-        # if it escapes from the main coroutine
-        logger.info("Shutdown complete.")
-
+    asyncio.run(main())
 ```
 
-## Examples
+### Creating Custom Sources
 
-See the `examples` directory for more usage examples.
+```python
+from hooklet.eventrix.v2.node import Node
+from hooklet.types import HookletMessage
+
+class CustomSource(Node):
+    def __init__(self, pilot, router):
+        super().__init__(pilot, [], router)
+
+    async def generator_func(self):
+        while self.is_running:
+            message = HookletMessage(
+                type="custom",
+                payload={"data": "example"}
+            )
+            yield message
+            await asyncio.sleep(1)
+```
+
+### Creating Custom Sinkers
+
+```python
+from hooklet.eventrix.v2.node import Node
+from hooklet.types import HookletMessage
+
+class CustomSinker(Node):
+    def __init__(self, pilot, sources, router):
+        super().__init__(pilot, sources, router)
+
+    async def handler_func(self, message: HookletMessage):
+        # Process the incoming message
+        processed_message = HookletMessage(
+            type="processed",
+            payload={"result": f"Processed {message.payload['data']}"}
+        )
+        yield processed_message
+```
+
+## Message Structure
+
+Messages in Hooklet v2 follow a structured format:
+
+```python
+class HookletMessage:
+    id: UUID
+    correlation_id: UUID | None
+    type: str
+    payload: dict
+    node_id: str | None
+    start_at: int | None
+    finish_at: int | None
+```
+
+## Best Practices
+
+1. **Error Handling**
+   - Implement proper error handling in both source and sinker nodes
+   - Use the `on_error` method to handle exceptions
+   - Ensure graceful shutdown in case of errors
+
+2. **Message Routing**
+   - Design clear routing patterns for your messages
+   - Use meaningful subject names
+   - Consider message flow and dependencies
+
+3. **Resource Management**
+   - Always properly close connections and resources
+   - Implement graceful shutdown procedures
+   - Handle cleanup in finally blocks
+
+4. **Monitoring**
+   - Use the built-in logging capabilities
+   - Monitor message flow and processing times
+   - Track node lifecycle events
 
 ## Requirements
 
-- Python 3.12+
-- nats-py 2.3.1+
+- Python 3.8+
+- NATS server (for NATS transport)
+- Required Python packages (see requirements.txt)
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
 
 ## License
 
-MIT
+[Your License Here]

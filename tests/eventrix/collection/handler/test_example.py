@@ -56,7 +56,7 @@ class TestExampleHandler:
         test_event = {"id": "test-id-123"}
         
         # Patch the logger to verify the log message
-        with patch.object(logging.getLogger("hooklet.eventrix.collection.handler.example"), "info") as mock_log:
+        with patch.object(example_handler.logger, "info") as mock_log:
             # Call the handler
             await example_handler_func(test_event)
             
