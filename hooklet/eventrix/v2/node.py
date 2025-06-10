@@ -61,10 +61,7 @@ class Node(BaseEventrix, ABC):
         """
         try:
             async for message in self.generator_func():
-                message.node_id = self.node_id
-                message.start_at = int(time.time() * 1000)
                 subject = self.router(message)
-                message.finish_at = int(time.time() * 1000)
                 if subject is not None:
                     await self.pilot.publish(subject, message.model_dump_json())
         except Exception as e:
