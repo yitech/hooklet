@@ -7,6 +7,7 @@ A simple logging system for the Hooklet framework.
 from .eventrix_logger import get_eventrix_logger
 from .hooklet_logger import (
     HookletLoggerConfig,
+    HookletLogger,
     LogFormat,
     LogLevel,
     configure_logging,
@@ -19,6 +20,7 @@ __all__ = [
     "LogLevel",
     "LogFormat",
     "HookletLoggerConfig",
+    "HookletLogger",
     "setup_default_logging",
     "get_logger",
     "configure_logging",
