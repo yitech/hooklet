@@ -6,8 +6,7 @@ Run both ExampleSource and ExampleHandler in a single script.
 import asyncio
 import logging
 import signal
-from hooklet.eventrix.collection.v2.source import ExampleSource
-from hooklet.eventrix.collection.v2.sinker import ExampleSinker
+from hooklet.eventrix.collection.v2.example import ExampleSource, ExampleSinker
 from hooklet.pilot import NatsPilot
 
 # Configure logging
