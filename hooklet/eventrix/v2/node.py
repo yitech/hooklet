@@ -2,7 +2,7 @@ import asyncio
 import time
 import uuid
 from abc import ABC
-from typing import AsyncIterator, AsyncGenerator, Callable, TypeVar
+from typing import AsyncIterator, AsyncGenerator, Callable, TypeVar, Any
 from functools import wraps
 
 from hooklet.base import BaseEventrix, BasePilot
@@ -38,6 +38,24 @@ class Node(BaseEventrix, ABC):
     @property
     def is_running(self) -> bool:
         return not self._shutdown_event.is_set()
+    
+    @property
+    def status(self) -> dict[str, Any]:
+        """
+        Get the status of the executor.
+        :return: A dictionary containing the status of the executor.
+        """
+        status = {
+            "node_id": self.node_id,
+            "type": self.__class__.__name__,
+            "status": "running" if self.is_running else "stopped",
+            "generator_tasks": [task.get_name() for task in self._generator_tasks],
+        }
+        base_status = super().status
+        status["created_at"] = base_status["created_at"]
+        status["started_at"] = base_status["started_at"]
+        status["finished_at"] = base_status["finished_at"]
+        return status
 
     async def generator_func(self) -> AsyncGenerator[HookletMessage, None]:
         """
