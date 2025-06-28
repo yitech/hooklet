@@ -158,7 +158,7 @@ class HookletMessage:
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.12+
 - NATS server (for NATS transport)
 - Required Python packages (see requirements.txt)
 
