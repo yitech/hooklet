@@ -47,6 +47,10 @@ class NatsPilot(BasePilot):
         self._handlers: Dict[str, Dict[str, MessageHandlerCallback]] = (
             {}
         )  # {subject: {handler_id: handler_func}}
+        # Request handlers
+        self._request_subscriptions: Dict[str, Subscription] = {}
+        self._request_handlers: Dict[str, MessageHandlerCallback] = {}
+        
 
     async def connect(self) -> None:
         """
@@ -221,3 +225,48 @@ class NatsPilot(BasePilot):
         for subject, handlers in self._handlers.items():
             result[subject] = list(handlers.keys())
         return result
+    
+    async def register_request_handler(self, subject: str, handler: MessageHandlerCallback) -> Any:
+        if subject in self._request_handlers:
+            logger.info(f"Request handler for subject {subject} already exists, replacing")
+            del self._request_handlers[subject]
+
+        self._request_handlers[subject] = handler
+        # Define wrapper function to handle message decoding and pass to handler
+        async def request_wrapper(msg):
+            try:
+                # Decode message data
+                data = json.loads(msg.data.decode()) if msg.data else {}
+                # Call user-provided handler with the data
+                resp = await handler(data)
+                await self.nc.publish(msg.reply, json.dumps(resp).encode())
+            except Exception as e:
+                logger.error(f"Error in request handler for subject '{subject}': {str(e)}")
+
+        # Subscribe to the subject
+        sub = await self.nc.subscribe(subject, cb=request_wrapper)
+
+        # Store subscription and handler
+        self._request_subscriptions[subject] = sub
+        self._request_handlers[subject] = handler
+
+        logger.info(f"Registered request handler for subject {subject}")
+        return handler
+    
+    async def unregister_request_handler(self, subject: str) -> bool:
+        if subject not in self._request_handlers:
+            logger.warning(f"No request handler registered for subject {subject}")
+            return False
+        await self._request_subscriptions[subject].unsubscribe()
+        del self._request_handlers[subject]
+        del self._request_subscriptions[subject]
+        logger.info(f"Unregistered request handler for subject {subject}")
+        
+    async def request(self, subject: str, data: Any, timeout: float = 5.0) -> Any:
+        if not self._connected:
+            await self.connect()
+        encoded_data = json.dumps(data).encode()
+        return await self.nc.request(subject, encoded_data, timeout)
+    
+    
+

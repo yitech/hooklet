@@ -12,16 +12,21 @@ logger = logging.getLogger(__name__)
 class InProcPilot(BasePilot):
     def __init__(self) -> None:
         super().__init__()
-        self._queue: asyncio.Queue = asyncio.Queue()
         self._connected: bool = False
-        self._handlers: Dict[str, Dict[str, Any]] = {}
+        # Queue for pub/sub
+        self._queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+        self._handlers: Dict[str, Dict[str, MessageHandlerCallback]] = {}
         self._consumer_task: asyncio.Task | None = None
+        # Queue for req/reply
+        self._request_handlers: Dict[str, MessageHandlerCallback] = {}
 
     async def connect(self) -> None:
         if self._connected:
             return
         self._connected = True
         self._consumer_task = asyncio.create_task(self._consume_messages())
+        self._request_consumer_task = asyncio.create_task(self._consume_requests())
+        self._reply_consumer_task = asyncio.create_task(self._consume_replies())
         logger.info("InProcPilot connected")
 
     def is_connected(self) -> bool:
@@ -74,6 +79,7 @@ class InProcPilot(BasePilot):
             logger.warning(f"Handler {handler_id} not found for unregistration")
         return removed
 
+
     async def publish(self, subject: str, data: Any) -> None:
         if not self.is_connected():
             await self.connect()
@@ -99,3 +105,24 @@ class InProcPilot(BasePilot):
             raise
         except Exception as e:
             logger.error(f"Unexpected error in consumer task: {e}")
+
+    async def register_request_handler(self, subject: str, handler: MessageHandlerCallback) -> bool:
+        """
+        Register a request handler for a specific subject.
+        This method should be implemented by subclasses to register the request handler.
+        """
+        raise NotImplementedError("Subclasses must implement register_request_handler()")
+    
+    async def unregister_request_handler(self, subject: str) -> bool:
+        """
+        Unregister a request handler for a specific subject.
+        This method should be implemented by subclasses to unregister the request handler.
+        """
+        raise NotImplementedError("Subclasses must implement unregister_request_handler()")
+    
+    async def request(self, subject: str, data: Any, timeout: float = 5.0) -> Any:
+        """
+        Request data from a specific subject.
+        This method should be implemented by subclasses to request the data.
+        """
+        raise NotImplementedError("Subclasses must implement request()")

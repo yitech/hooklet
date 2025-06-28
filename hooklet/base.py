@@ -66,6 +66,30 @@ class BasePilot(ABC):
         This method should be implemented by subclasses to publish the data.
         """
         raise NotImplementedError("Subclasses must implement publish()")
+    
+    @abstractmethod
+    async def register_request_handler(self, subject: str, handler: MessageHandlerCallback) -> bool:
+        """
+        Register a request handler for a specific subject.
+        This method should be implemented by subclasses to register the request handler.
+        """
+        raise NotImplementedError("Subclasses must implement register_request_handler()")
+    
+    @abstractmethod
+    async def unregister_request_handler(self, subject: str) -> bool:
+        """
+        Unregister a request handler for a specific subject.
+        This method should be implemented by subclasses to unregister the request handler.
+        """
+        raise NotImplementedError("Subclasses must implement unregister_request_handler()")
+    
+    @abstractmethod
+    async def request(self, subject: str, data: Any, timeout: float = 5.0) -> Any:
+        """
+        Request data from a specific subject.
+        This method should be implemented by subclasses to request the data.
+        """
+        raise NotImplementedError("Subclasses must implement request()")
 
 
 class BaseEventrix(ABC):

@@ -244,3 +244,24 @@ class ZmqPilot(BasePilot):
                 if self._connected:
                     logger.error(f"Message consumption error: {e}", exc_info=True)
                 break
+    
+    async def register_request_handler(self, subject: str, handler: MessageHandlerCallback) -> bool:
+        """
+        Register a request handler for a specific subject.
+        This method should be implemented by subclasses to register the request handler.
+        """
+        raise NotImplementedError("Subclasses must implement register_request_handler()")
+    
+    async def unregister_request_handler(self, subject: str) -> bool:
+        """
+        Unregister a request handler for a specific subject.
+        This method should be implemented by subclasses to unregister the request handler.
+        """
+        raise NotImplementedError("Subclasses must implement unregister_request_handler()")
+    
+    async def request(self, subject: str, data: Any, timeout: float = 5.0) -> Any:
+        """
+        Request data from a specific subject.
+        This method should be implemented by subclasses to request the data.
+        """
+        raise NotImplementedError("Subclasses must implement request()")
