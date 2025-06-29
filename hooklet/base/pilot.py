@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from hooklet.base.types import Callback, AsyncCallback
+from hooklet.base.types import Callback, AsyncCallback, Msg, Headers
 
 class PubSub(ABC):
     """
@@ -9,7 +9,7 @@ class PubSub(ABC):
     """
 
     @abstractmethod
-    async def publish(self, subject: str, data: Any) -> None:
+    async def publish(self, subject: str, data: Msg, headers: Headers = {}) -> None:
         """
         Publish data to a specific subject.
         """
@@ -33,7 +33,7 @@ class PubSub(ABC):
 class ReqReply(ABC):
 
     @abstractmethod
-    async def request(self, subject: str, data: Any, timeout: float = 5.0) -> Any:
+    async def request(self, subject: str, data: Msg, headers: Headers = {}) -> Any:
         """
         Request data from a specific subject.
         """

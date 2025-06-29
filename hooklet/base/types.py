@@ -1,5 +1,8 @@
 from typing import Any, Awaitable, Callable
 
-Callback = Callable[[Any], Any]
-AsyncCallback = Callable[[Any], Awaitable[Any]]
+Msg = dict[str, Any]
+Headers = dict[str, Any]
+Callback = Callable[[Msg], Any]
+AsyncCallback = Callable[[Msg], Awaitable[Any]]
+
 
