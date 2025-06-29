@@ -14,15 +14,18 @@ class HeaderValidator:
     """
     
     # Standard header keys
-    FORWARD_TO = "Hooklet-Forward-To"
-    FORWARD_DELAY = "Hooklet-Forward-Delay"
-    FORWARD_RETRY = "Hooklet-Forward-Retry"
-    FORWARD_TIMEOUT = "Hooklet-Forward-Timeout"
-    VALIDATION_RULES = "Hooklet-Validation-Rules"
-    PROCESSING_MODE = "Hooklet-Processing-Mode"
     CORRELATION_ID = "Hooklet-Correlation-ID"
     TRACE_ID = "Hooklet-Trace-ID"
+
+    # PubSub headers
+    PUBSUB_FORWARD_TO = "Hooklet-Forward-To"
+
+    # ReqReply headers
+    REQ_REPLY_TIMEOUT = "Hooklet-Req-Reply-Timeout"
+    REQ_REPLY_RETRY = "Hooklet-Req-Reply-Retry"
+    REQ_REPLY_DELAY = "Hooklet-Req-Reply-Delay"
     
+
     def __init__(self, pilot: Pilot) -> None:
         self._pilot = pilot
         self._headers: Headers = {}
@@ -39,43 +42,30 @@ class HeaderValidator:
         self._headers.clear()
         self._validation_errors.clear()
         
-        # Validate forward-to header
-        if self.FORWARD_TO in headers:
-            forward_to = headers[self.FORWARD_TO]
-            if not isinstance(forward_to, str) or not forward_to.strip():
-                self._validation_errors.append(f"Invalid {self.FORWARD_TO}: must be a non-empty string")
-                
-        # Validate forward-delay header
-        if self.FORWARD_DELAY in headers:
-            try:
-                delay = float(headers[self.FORWARD_DELAY])
-                if delay < 0:
-                    self._validation_errors.append(f"Invalid {self.FORWARD_DELAY}: must be non-negative")
-            except (ValueError, TypeError):
-                self._validation_errors.append(f"Invalid {self.FORWARD_DELAY}: must be a valid number")
-                
-        # Validate forward-retry header
-        if self.FORWARD_RETRY in headers:
-            try:
-                retry = int(headers[self.FORWARD_RETRY])
-                if retry < 0:
-                    self._validation_errors.append(f"Invalid {self.FORWARD_RETRY}: must be non-negative")
-            except (ValueError, TypeError):
-                self._validation_errors.append(f"Invalid {self.FORWARD_RETRY}: must be a valid integer")
-                
-        # Validate forward-timeout header
-        if self.FORWARD_TIMEOUT in headers:
-            try:
-                timeout = float(headers[self.FORWARD_TIMEOUT])
-                if timeout <= 0:
-                    self._validation_errors.append(f"Invalid {self.FORWARD_TIMEOUT}: must be positive")
-            except (ValueError, TypeError):
-                self._validation_errors.append(f"Invalid {self.FORWARD_TIMEOUT}: must be a valid number")
-                
-        if self._validation_errors:
-            logger.warning(f"Header validation errors: {self._validation_errors}")
+        if self.PUBSUB_FORWARD_TO in headers:
+            if isinstance(headers[self.PUBSUB_FORWARD_TO], str):
+                self._headers[self.PUBSUB_FORWARD_TO] = [target.strip() for target in headers[self.PUBSUB_FORWARD_TO].split(',') if target.strip()]
+            else:
+                self._headers[self.PUBSUB_FORWARD_TO] = headers[self.PUBSUB_FORWARD_TO]
+        if self.REQ_REPLY_TIMEOUT in headers:
+            self._headers[self.REQ_REPLY_TIMEOUT] = headers[self.REQ_REPLY_TIMEOUT]
+        if self.REQ_REPLY_RETRY in headers:
+            self._headers[self.REQ_REPLY_RETRY] = headers[self.REQ_REPLY_RETRY]
+        if self.REQ_REPLY_DELAY in headers:
+            self._headers[self.REQ_REPLY_DELAY] = headers[self.REQ_REPLY_DELAY]
+        if self.REQ_REPLY_MODE in headers:
+            self._headers[self.REQ_REPLY_MODE] = headers[self.REQ_REPLY_MODE]
+        if self.REQ_REPLY_VALIDATION_RULES in headers:
+            self._headers[self.REQ_REPLY_VALIDATION_RULES] = headers[self.REQ_REPLY_VALIDATION_RULES]
+        if self.PROCESSING_MODE in headers:
+            self._headers[self.PROCESSING_MODE] = headers[self.PROCESSING_MODE]
+        if self.CORRELATION_ID in headers:
+            self._headers[self.CORRELATION_ID] = headers[self.CORRELATION_ID]
+        if self.TRACE_ID in headers:
+            self._headers[self.TRACE_ID] = headers[self.TRACE_ID]
         
-        return headers
+        return self._headers
+
             
     def get_forward_targets(self) -> List[str]:
         """Get list of forward targets from headers."""
