@@ -1,10 +1,10 @@
 import asyncio
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Callable, Awaitable
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg as NatsMsg
 from nats.aio.subscription import Subscription
-from hooklet.base import Pilot, PubSub, ReqReply, AsyncCallback, Msg
+from hooklet.base import Pilot, PubSub, ReqReply, Msg
 from hooklet.logger import get_logger
 
 logger = get_logger(__name__)
@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 class NatsPubSub(PubSub):
     def __init__(self, pilot: 'NatsPilot') -> None:
         self._pilot = pilot
-        self._subscriptions: Dict[str, list[AsyncCallback]] = {}
+        self._subscriptions: Dict[str, list[Callable[[Msg], Awaitable[Any]]]] = {}
         self._nats_subscriptions: Dict[str, list[Subscription]] = {}
 
     async def publish(self, subject: str, data: Msg) -> None:
@@ -23,7 +23,7 @@ class NatsPubSub(PubSub):
         await self._pilot._nats_client.publish(subject, payload)
         logger.debug(f"Published to {subject}: {data}")
 
-    async def subscribe(self, subject: str, callback: AsyncCallback) -> int:
+    async def subscribe(self, subject: str, callback: Callable[[Msg], Awaitable[Any]]) -> int:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
         subscription_id = hash(callback)
@@ -77,7 +77,7 @@ class NatsPubSub(PubSub):
 class NatsReqReply(ReqReply):
     def __init__(self, pilot: 'NatsPilot') -> None:
         self._pilot = pilot
-        self._callbacks: Dict[str, AsyncCallback] = {}
+        self._callbacks: Dict[str, Callable[[Any], Awaitable[Any]]] = {}
         self._nats_subscriptions: Dict[str, Subscription] = {}
 
     async def request(self, subject: str, data: Msg) -> Any:
@@ -92,7 +92,7 @@ class NatsReqReply(ReqReply):
             logger.error(f"Error making request to {subject}: {e}", exc_info=True)
             raise
 
-    async def register_callback(self, subject: str, callback: AsyncCallback) -> str:
+    async def register_callback(self, subject: str, callback: Callable[[Any], Awaitable[Any]]) -> str:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
         async def nats_callback(msg: NatsMsg):

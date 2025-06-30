@@ -4,7 +4,7 @@ from typing import Coroutine
 import asyncio
 from abc import ABC, abstractmethod
 from .pilot import Pilot, Msg
-from .types import AsyncCallback
+from .types import Req, Reply
 
 class EventType(Enum):
     """

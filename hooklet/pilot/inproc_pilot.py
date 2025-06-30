@@ -1,8 +1,8 @@
 import asyncio
 import uuid
 from collections import defaultdict
-from typing import Any, Dict, Tuple
-from hooklet.base import Pilot, PubSub, ReqReply, AsyncCallback, Msg
+from typing import Any, Dict, Tuple, Callable, Awaitable
+from hooklet.base import Pilot, PubSub, ReqReply, Msg
 from hooklet.logger import get_logger
 
 logger = get_logger(__name__)
@@ -10,12 +10,12 @@ logger = get_logger(__name__)
 class InprocPubSub(PubSub):
     def __init__(self, pilot: 'InprocPilot') -> None:
         self._pilot = pilot
-        self._subscriptions: Dict[str, list[AsyncCallback]] = defaultdict(list)
+        self._subscriptions: Dict[str, list[Callable[[Msg], Awaitable[Any]]]] = defaultdict(list)
 
     async def publish(self, subject: str, data: Msg) -> None:
         await self._pilot._handle_publish(subject, data)
 
-    def subscribe(self, subject: str, callback: AsyncCallback) -> int:
+    def subscribe(self, subject: str, callback: Callable[[Msg], Awaitable[Any]]) -> int:
         self._subscriptions[subject].append(callback)
         subscription_id = hash(callback)
         logger.info(f"Subscribed to {subject} with ID {subscription_id}")
@@ -35,19 +35,19 @@ class InprocPubSub(PubSub):
                 pass
         return False
     
-    def get_subscriptions(self, subject: str) -> list[AsyncCallback]:
+    def get_subscriptions(self, subject: str) -> list[Callable[[Msg], Awaitable[Any]]]:
         return self._subscriptions[subject]
 
 class InprocReqReply(ReqReply):
     def __init__(self) -> None:
-        self._callbacks: Dict[str, AsyncCallback] = {}
+        self._callbacks: Dict[str, Callable[[Any], Awaitable[Any]]] = {}
 
     async def request(self, subject: str, data: Msg) -> Any:
         if subject not in self._callbacks:
             raise ValueError(f"No callback registered for {subject}")
         return await self._callbacks[subject](data)
     
-    def register_callback(self, subject: str, callback: AsyncCallback) -> str:
+    def register_callback(self, subject: str, callback: Callable[[Any], Awaitable[Any]]) -> str:
         self._callbacks[subject] = callback
         return subject
     

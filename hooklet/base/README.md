@@ -49,7 +49,7 @@ class PubSub(ABC):
     async def publish(self, subject: str, data: Any) -> None: ...
     
     @abstractmethod
-    def subscribe(self, subject: str, callback: Callback|AsyncCallback) -> str: ...
+    def subscribe(self, subject: str, callback: Callable[[Any], Awaitable[Any]]) -> str: ...
     
     @abstractmethod
     def unsubscribe(self, subject: str) -> bool: ...
@@ -65,16 +65,33 @@ class ReqReply(ABC):
     async def request(self, subject: str, data: Any, timeout: float = 5.0) -> Any: ...
     
     @abstractmethod
-    def register_callback(self, subject: str, callback: Callback|AsyncCallback) -> str: ...
+    def register_callback(self, subject: str, callback: Callable[[Any], Awaitable[Any]]) -> str: ...
 ```
 
 #### 4. Type Definitions (`types.py`)
 
-Defines common callback types used throughout the system:
+Defines common types used throughout the system:
 
 ```python
-Callback = Callable[[Any], Any]
-AsyncCallback = Callable[[Any], Awaitable[Any]]
+class Msg(TypedDict):
+    _id: str
+    type: str
+    data: Any
+    error: str | None
+
+class Req(TypedDict):
+    _id: str
+    type: str
+    params: Any
+    error: str | None
+
+class Reply(TypedDict):
+    _id: str
+    type: str
+    result: Any
+    error: str | None
+    start_ms: int
+    end_ms: int
 ```
 
 ## Design Principles
