@@ -55,19 +55,20 @@ class Node:
 
     async def close(self):
         self.shutdown_event.set()
-        
+        await self.on_finish()
 
     async def on_finish(self):
         """
         This method is called when the node is finished.
         """
-        await asyncio.wait_for(self.task, timeout=2)
-        if self.task is not None and not self.task.done():
+        try:
+            await asyncio.wait_for(self.task, timeout=2)
+        except asyncio.TimeoutError:
             self.task.cancel()
-            try:
-                await self.task
-            except asyncio.CancelledError:
-                pass
+        try:
+            await self.task
+        except asyncio.CancelledError:
+            pass
         for coroutine in self.event_handlers[EventType.FINISH]:
             await coroutine
         self.event_handlers[EventType.FINISH].clear()

@@ -3,7 +3,7 @@ from hooklet.base.node import Node
 from hooklet.base.pilot import ReqReply, Msg
 import asyncio
 
-class RPC(Node, ABC):
+class RPCServer(Node, ABC):
     def __init__(self, name: str, reqreply: ReqReply):
         super().__init__(name)
         self.reqreply = reqreply
@@ -20,5 +20,16 @@ class RPC(Node, ABC):
     async def run(self):
         await self.shutdown_event.wait()
 
+
+class RPCClient(Node):
+    def __init__(self, name: str, reqreply: ReqReply):
+        super().__init__(name)
+        self.reqreply = reqreply
+
+    async def request(self, subject: str, msg: Msg) -> Msg:
+        return await self.reqreply.request(subject, msg)
+    
+    async def run(self):
+        await self.shutdown_event.wait()
 
     

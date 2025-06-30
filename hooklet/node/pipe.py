@@ -30,5 +30,4 @@ class Pipe(Node, ABC):
                     await self.pubsub.publish(subject, msg)
             except asyncio.TimeoutError:
                 pass
-
     
