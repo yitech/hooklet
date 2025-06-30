@@ -16,7 +16,7 @@ class PubSub(ABC):
         raise NotImplementedError("Subclasses must implement publish()")
     
     @abstractmethod
-    def subscribe(self, subject: str, callback: Callback|AsyncCallback) -> str:
+    def subscribe(self, subject: str, callback: AsyncCallback) -> str:
         """
         Subscribe to a specific subject.
         """
@@ -40,7 +40,7 @@ class ReqReply(ABC):
         raise NotImplementedError("Subclasses must implement request()")
 
     @abstractmethod
-    def register_callback(self, subject: str, callback: Callback|AsyncCallback) -> str:
+    def register_callback(self, subject: str, callback: AsyncCallback) -> str:
         """
         Register a callback for a specific subject.
         """

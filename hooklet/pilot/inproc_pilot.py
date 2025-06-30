@@ -14,14 +14,14 @@ class InprocPubSub(PubSub):
         self._validator = HeaderValidator(pilot)
         # Data processing queue
         self._queue: asyncio.Queue[Tuple[str, Msg]] = asyncio.Queue()
-        self._subscriptions: Dict[str, Dict[str, Callback|AsyncCallback]] = defaultdict(dict)
+        self._subscriptions: Dict[str, Dict[str, AsyncCallback]] = defaultdict(dict)
         self._consumer_task: asyncio.Task[None] = asyncio.create_task(self._consume())
         self._shutdown_event = asyncio.Event()
 
     async def publish(self, subject: str, data: Msg, headers: Headers = {}) -> None:
         await self._pilot._handle_publish(subject, data, headers)
 
-    def subscribe(self, subject: str, callback: Callback|AsyncCallback) -> str:
+    def subscribe(self, subject: str, callback: AsyncCallback) -> str:
         subscription_id = str(uuid.uuid4())
         self._subscriptions[subject][subscription_id] = callback
         logger.info(f"Subscribed to {subject} with ID {subscription_id}")
@@ -34,7 +34,7 @@ class InprocPubSub(PubSub):
             return True
         return False
     
-    def _get_subscriptions(self, subject: str) -> Dict[str, Callback|AsyncCallback]:
+    def _get_subscriptions(self, subject: str) -> Dict[str, AsyncCallback]:
         return self._subscriptions[subject]
 
 class InprocReqReply(ReqReply):
@@ -44,7 +44,7 @@ class InprocReqReply(ReqReply):
     def request(self, subject: str, data: dict[str, Any], headers: dict[str, Any] = {}) -> Any:
         pass
     
-    def register_callback(self, subject: str, callback: Callback|AsyncCallback) -> str:
+    def register_callback(self, subject: str, callback: AsyncCallback) -> str:
         pass
 
 class InprocPilot(Pilot):
@@ -83,6 +83,7 @@ class InprocPilot(Pilot):
                         await callback(data)
                     else:
                         callback(data)
+                    
                     
                     
 
