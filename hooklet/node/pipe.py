@@ -21,7 +21,6 @@ class Pipe(Node, ABC):
     async def pipe(self, msg: Msg) -> AsyncGenerator[Msg, None]:
         raise NotImplementedError("Subclasses must implement pipe()")
 
-
     async def run(self):
         while self.is_running:
             try:
