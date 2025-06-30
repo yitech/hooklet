@@ -77,7 +77,8 @@ class TestInprocPubSub:
     @pytest.fixture
     def pilot(self):
         """Create a mock pilot for testing."""
-        return MagicMock()
+        mock_pilot = AsyncMock()
+        return mock_pilot
 
     @pytest.fixture
     def pubsub(self, pilot):

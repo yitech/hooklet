@@ -60,7 +60,7 @@ class InprocPilot(Pilot):
         super().__init__()
         self._connected = False
         self._pubsub = InprocPubSub(self)
-        self._reqreply = InprocReqReply(self)
+        self._reqreply = InprocReqReply()
 
     def is_connected(self) -> bool:
         return self._connected
