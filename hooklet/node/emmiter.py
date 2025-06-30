@@ -15,14 +15,14 @@ class Emitter(Node, ABC):
     
 
     @abstractmethod
-    async def emitter(self) -> AsyncGenerator[Msg, None]:
+    async def emit(self) -> AsyncGenerator[Msg, None]:
         """
-        Use is_running to stop the emitter.
+        Use is_running to stop the emit.
         """
-        raise NotImplementedError("Subclasses must implement emitter()")
+        raise NotImplementedError("Subclasses must implement emit()")
 
     async def run(self):
         while self.is_running:
-            async for msg in self.emitter():
+            async for msg in self.emit():
                 subject = self.router(msg)
                 await self.pubsub.publish(subject, msg)
