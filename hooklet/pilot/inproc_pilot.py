@@ -39,13 +39,16 @@ class InprocPubSub(PubSub):
 
 class InprocReqReply(ReqReply):
     def __init__(self) -> None:
-        pass
+        self._callbacks: Dict[str, AsyncCallback] = {}
 
-    def request(self, subject: str, data: dict[str, Any], headers: dict[str, Any] = {}) -> Any:
-        pass
+    async def request(self, subject: str, data: dict[str, Any]) -> Any:
+        if subject not in self._callbacks:
+            raise ValueError(f"No callback registered for {subject}")
+        return await self._callbacks[subject](**data)
     
     def register_callback(self, subject: str, callback: AsyncCallback) -> str:
-        pass
+        self._callbacks[subject] = callback
+        return subject
 
 class InprocPilot(Pilot):
     def __init__(self) -> None:
@@ -73,22 +76,19 @@ class InprocPilot(Pilot):
     def reqreply(self) -> ReqReply:
         return self._reqreply
     
-    async def _handle_publish(self, subject: str, data: Msg, headers: Headers = {}) -> None:
+    async def _handle_publish(self, subject: str, data: Msg) -> None:
         try:
-            async with self._validator.validate(headers) as validator:
-                # Process subscriptions
-                subscriptions = self._pubsub._get_subscriptions(subject)
-                for _, callback in subscriptions.items():
-                    if asyncio.iscoroutinefunction(callback):
-                        await callback(data)
-                    else:
-                        callback(data)
-                    
-                    
-                    
-
+            subscriptions = self._pubsub._get_subscriptions(subject)
+            tasks = [callback(data) for _, callback in subscriptions.items()]
+            await asyncio.gather(*tasks)
         except Exception as e:
             logger.error(f"Error publishing to {subject}: {e}", exc_info=True)
             raise
 
+    async def _handle_request(self, subject: str, data: Msg) -> Msg:
+        try:
+            return await self._reqreply.request(subject, data)
+        except Exception as e:
+            logger.error(f"Error requesting from {subject}: {e}", exc_info=True)
+            raise
 
