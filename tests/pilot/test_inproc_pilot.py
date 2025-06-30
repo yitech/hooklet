@@ -3,209 +3,358 @@ import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from hooklet.pilot.inproc_pilot import InProcPilot
+from hooklet.pilot.inproc_pilot import InprocPilot, InprocPubSub, InprocReqReply
+from hooklet.base.types import Msg
 
 
-@pytest.fixture
-def inproc_pilot():
-    pilot = InProcPilot()
-    return pilot
+class TestInprocPilot:
+    """Test cases for InprocPilot class."""
 
+    @pytest.fixture
+    def pilot(self):
+        """Create a fresh InprocPilot instance for each test."""
+        return InprocPilot()
 
-@pytest_asyncio.fixture
-async def connected_pilot(inproc_pilot):
-    await inproc_pilot.connect()
-    yield inproc_pilot
-    await inproc_pilot.close()
+    @pytest.fixture
+    def sample_msg(self):
+        """Create a sample message for testing."""
+        return {"data": "test_message", "id": "123"}
 
+    @pytest_asyncio.fixture
+    async def connected_pilot(self):
+        """Create and connect an InprocPilot instance."""
+        pilot = InprocPilot()
+        await pilot.connect()
+        yield pilot
+        await pilot.disconnect()
 
-class TestInProcPilot:
-    
+    def test_init(self, pilot):
+        """Test InprocPilot initialization."""
+        assert pilot is not None
+        assert not pilot.is_connected()
+        assert pilot.pubsub() is not None
+        assert pilot.reqreply() is not None
+
     @pytest.mark.asyncio
-    async def test_init(self, inproc_pilot):
-        """Test that the pilot initializes correctly."""
-        assert not inproc_pilot.is_connected()
-        assert inproc_pilot._handlers == {}
-        assert inproc_pilot._consumer_task is None
-        
-    @pytest.mark.asyncio
-    async def test_connect(self, inproc_pilot):
+    async def test_connect(self, pilot):
         """Test connecting to the pilot."""
-        await inproc_pilot.connect()
-        assert inproc_pilot.is_connected()
-        assert inproc_pilot._consumer_task is not None
-        # Clean up
-        await inproc_pilot.close()
-        
+        assert not pilot.is_connected()
+        await pilot.connect()
+        assert pilot.is_connected()
+
     @pytest.mark.asyncio
-    async def test_connect_idempotent(self, connected_pilot):
-        """Test that connecting multiple times doesn't cause issues."""
-        # Should already be connected from fixture
+    async def test_disconnect(self, connected_pilot):
+        """Test disconnecting from the pilot."""
         assert connected_pilot.is_connected()
-        # Connect again
-        await connected_pilot.connect()
-        # Should still be connected with no errors
-        assert connected_pilot.is_connected()
-        
-    @pytest.mark.asyncio
-    async def test_close(self, connected_pilot):
-        """Test closing the connection."""
-        assert connected_pilot.is_connected()
-        await connected_pilot.close()
+        await connected_pilot.disconnect()
         assert not connected_pilot.is_connected()
-        assert connected_pilot._consumer_task is None
-        assert connected_pilot._handlers == {}
-        
+
     @pytest.mark.asyncio
-    async def test_close_idempotent(self, inproc_pilot):
-        """Test that closing when not connected doesn't cause issues."""
-        assert not inproc_pilot.is_connected()
-        await inproc_pilot.close()
-        assert not inproc_pilot.is_connected()
-        
+    async def test_context_manager(self):
+        """Test using InprocPilot as async context manager."""
+        async with InprocPilot() as pilot:
+            assert pilot.is_connected()
+        assert not pilot.is_connected()
+
+    def test_pubsub_interface(self, pilot):
+        """Test that pubsub() returns the correct interface."""
+        pubsub = pilot.pubsub()
+        assert hasattr(pubsub, 'publish')
+        assert hasattr(pubsub, 'subscribe')
+        assert hasattr(pubsub, 'unsubscribe')
+
+    def test_reqreply_interface(self, pilot):
+        """Test that reqreply() returns the correct interface."""
+        reqreply = pilot.reqreply()
+        assert hasattr(reqreply, 'request')
+        assert hasattr(reqreply, 'register_callback')
+        assert hasattr(reqreply, 'unregister_callback')
+
+
+class TestInprocPubSub:
+    """Test cases for InprocPubSub class."""
+
+    @pytest.fixture
+    def pilot(self):
+        """Create a mock pilot for testing."""
+        return MagicMock()
+
+    @pytest.fixture
+    def pubsub(self, pilot):
+        """Create an InprocPubSub instance."""
+        return InprocPubSub(pilot)
+
+    @pytest.fixture
+    def sample_msg(self):
+        """Create a sample message for testing."""
+        return {"data": "test_message", "id": "123"}
+
+    @pytest.fixture
+    def mock_callback(self):
+        """Create a mock async callback."""
+        return AsyncMock()
+
     @pytest.mark.asyncio
-    async def test_register_handler(self, connected_pilot):
-        """Test registering a handler."""
-        handler = AsyncMock()
-        handler_id = await connected_pilot.register_handler("test_subject", handler)
-        
-        # Check the handler was registered
-        assert "test_subject" in connected_pilot._handlers
-        assert handler_id in connected_pilot._handlers["test_subject"]
-        assert connected_pilot._handlers["test_subject"][handler_id] == handler
-        
+    async def test_init(self, pilot):
+        """Test InprocPubSub initialization."""
+        pubsub = InprocPubSub(pilot)
+        assert pubsub._pilot == pilot
+        assert pubsub._subscriptions == {}
+
     @pytest.mark.asyncio
-    async def test_register_handler_with_custom_id(self, connected_pilot):
-        """Test registering a handler with a custom ID."""
-        handler = AsyncMock()
-        custom_id = "my_custom_handler_id"
-        returned_id = await connected_pilot.register_handler("test_subject", handler, custom_id)
+    async def test_publish(self, pubsub, sample_msg):
+        """Test publishing a message."""
+        subject = "test.subject"
+        await pubsub.publish(subject, sample_msg)
+        pubsub._pilot._handle_publish.assert_called_once_with(subject, sample_msg)
+
+    def test_subscribe(self, pubsub, mock_callback):
+        """Test subscribing to a subject."""
+        subject = "test.subject"
+        subscription_id = pubsub.subscribe(subject, mock_callback)
         
-        # Check the handler was registered with the custom ID
-        assert returned_id == custom_id
-        assert "test_subject" in connected_pilot._handlers
-        assert custom_id in connected_pilot._handlers["test_subject"]
+        assert subscription_id == hash(mock_callback)
+        assert mock_callback in pubsub._subscriptions[subject]
+
+    def test_subscribe_multiple_callbacks(self, pubsub):
+        """Test subscribing multiple callbacks to the same subject."""
+        subject = "test.subject"
+        callback1 = AsyncMock()
+        callback2 = AsyncMock()
         
+        sub_id1 = pubsub.subscribe(subject, callback1)
+        sub_id2 = pubsub.subscribe(subject, callback2)
+        
+        assert sub_id1 == hash(callback1)
+        assert sub_id2 == hash(callback2)
+        assert len(pubsub._subscriptions[subject]) == 2
+        assert callback1 in pubsub._subscriptions[subject]
+        assert callback2 in pubsub._subscriptions[subject]
+
+    def test_unsubscribe_success(self, pubsub, mock_callback):
+        """Test successful unsubscription."""
+        subject = "test.subject"
+        subscription_id = pubsub.subscribe(subject, mock_callback)
+        
+        result = pubsub.unsubscribe(subject, subscription_id)
+        
+        assert result is True
+        assert mock_callback not in pubsub._subscriptions[subject]
+
+    def test_unsubscribe_nonexistent_subject(self, pubsub):
+        """Test unsubscription from non-existent subject."""
+        result = pubsub.unsubscribe("nonexistent.subject", 123)
+        assert result is False
+
+    def test_unsubscribe_nonexistent_id(self, pubsub, mock_callback):
+        """Test unsubscription with non-existent subscription ID."""
+        subject = "test.subject"
+        pubsub.subscribe(subject, mock_callback)
+        
+        result = pubsub.unsubscribe(subject, 99999)  # Non-existent ID
+        
+        assert result is False
+        assert mock_callback in pubsub._subscriptions[subject]  # Should still be subscribed
+
+    def test_get_subscriptions(self, pubsub, mock_callback):
+        """Test getting subscriptions for a subject."""
+        subject = "test.subject"
+        pubsub.subscribe(subject, mock_callback)
+        
+        subscriptions = pubsub.get_subscriptions(subject)
+        
+        assert mock_callback in subscriptions
+        assert len(subscriptions) == 1
+
+    def test_get_subscriptions_empty(self, pubsub):
+        """Test getting subscriptions for a subject with no subscriptions."""
+        subject = "test.subject"
+        subscriptions = pubsub.get_subscriptions(subject)
+        assert subscriptions == []
+
+
+class TestInprocReqReply:
+    """Test cases for InprocReqReply class."""
+
+    @pytest.fixture
+    def reqreply(self):
+        """Create an InprocReqReply instance."""
+        return InprocReqReply()
+
+    @pytest.fixture
+    def sample_msg(self):
+        """Create a sample message for testing."""
+        return {"data": "test_message", "id": "123"}
+
+    @pytest.fixture
+    def mock_callback(self):
+        """Create a mock async callback."""
+        return AsyncMock(return_value={"response": "success"})
+
+    def test_init(self, reqreply):
+        """Test InprocReqReply initialization."""
+        assert reqreply._callbacks == {}
+
     @pytest.mark.asyncio
-    async def test_register_duplicate_handler_id(self, connected_pilot):
-        """Test that registering a handler with an existing ID raises an error."""
-        handler1 = AsyncMock()
-        handler2 = AsyncMock()
-        custom_id = "duplicate_id"
+    async def test_register_callback(self, reqreply, mock_callback):
+        """Test registering a callback."""
+        subject = "test.subject"
+        result = reqreply.register_callback(subject, mock_callback)
         
-        await connected_pilot.register_handler("test_subject1", handler1, custom_id)
-        
-        with pytest.raises(ValueError, match=f"Handler ID {custom_id} already exists"):
-            await connected_pilot.register_handler("test_subject2", handler2, custom_id)
-            
+        assert result == subject
+        assert reqreply._callbacks[subject] == mock_callback
+
     @pytest.mark.asyncio
-    async def test_unregister_handler(self, connected_pilot):
-        """Test unregistering a handler."""
-        handler = AsyncMock()
-        custom_id = "handler_to_remove"
-        await connected_pilot.register_handler("test_subject", handler, custom_id)
+    async def test_request_success(self, reqreply, mock_callback, sample_msg):
+        """Test successful request."""
+        subject = "test.subject"
+        reqreply.register_callback(subject, mock_callback)
         
-        # Verify it's registered
-        assert custom_id in connected_pilot._handlers["test_subject"]
+        result = await reqreply.request(subject, sample_msg)
         
-        # Unregister and verify it's removed
-        await connected_pilot.unregister_handler(custom_id)
-        assert "test_subject" not in connected_pilot._handlers or custom_id not in connected_pilot._handlers["test_subject"]
-        
+        mock_callback.assert_called_once_with(sample_msg)
+        assert result == {"response": "success"}
+
     @pytest.mark.asyncio
-    async def test_unregister_nonexistent_handler(self, connected_pilot):
-        """Test unregistering a handler that doesn't exist doesn't cause issues."""
-        with patch("hooklet.pilot.inproc_pilot.logger.warning") as mock_warning:
-            await connected_pilot.unregister_handler("nonexistent_id")
-            mock_warning.assert_called_once()
-            
+    async def test_request_nonexistent_subject(self, reqreply, sample_msg):
+        """Test request to non-existent subject."""
+        subject = "nonexistent.subject"
+        
+        with pytest.raises(ValueError, match=f"No callback registered for {subject}"):
+            await reqreply.request(subject, sample_msg)
+
+    def test_unregister_callback(self, reqreply, mock_callback):
+        """Test unregistering a callback."""
+        subject = "test.subject"
+        reqreply.register_callback(subject, mock_callback)
+        
+        assert subject in reqreply._callbacks
+        
+        reqreply.unregister_callback(subject)
+        
+        assert subject not in reqreply._callbacks
+
+    def test_unregister_nonexistent_callback(self, reqreply):
+        """Test unregistering a non-existent callback."""
+        subject = "nonexistent.subject"
+        # Should not raise an exception
+        reqreply.unregister_callback(subject)
+
+
+class TestInprocPilotIntegration:
+    """Integration tests for InprocPilot with PubSub and ReqReply."""
+
+    @pytest_asyncio.fixture
+    async def pilot(self):
+        """Create and connect an InprocPilot instance."""
+        pilot = InprocPilot()
+        await pilot.connect()
+        yield pilot
+        await pilot.disconnect()
+
+    @pytest.fixture
+    def sample_msg(self):
+        """Create a sample message for testing."""
+        return {"data": "test_message", "id": "123"}
+
     @pytest.mark.asyncio
-    async def test_publish_and_handle(self, connected_pilot):
-        """Test publishing a message and handling it."""
-        test_data = {"key": "value"}
-        handler = AsyncMock()
+    async def test_pubsub_integration(self, pilot, sample_msg):
+        """Test pub/sub functionality integration."""
+        pubsub = pilot.pubsub()
+        received_messages = []
         
-        await connected_pilot.register_handler("test_subject", handler)
-        await connected_pilot.publish("test_subject", test_data)
+        async def message_handler(msg):
+            received_messages.append(msg)
         
-        # Wait a bit for the message to be processed
+        subject = "test.subject"
+        subscription_id = pubsub.subscribe(subject, message_handler)
+        
+        await pubsub.publish(subject, sample_msg)
+        
+        # Give some time for async processing
         await asyncio.sleep(0.1)
         
-        # Check if handler was called with the correct data
-        handler.assert_called_once_with(test_data)
+        assert len(received_messages) == 1
+        assert received_messages[0] == sample_msg
         
+        # Test unsubscription
+        success = pubsub.unsubscribe(subject, subscription_id)
+        assert success is True
+
     @pytest.mark.asyncio
-    async def test_publish_to_multiple_handlers(self, connected_pilot):
-        """Test publishing a message to multiple handlers."""
-        test_data = {"key": "value"}
-        handler1 = AsyncMock()
-        handler2 = AsyncMock()
+    async def test_reqreply_integration(self, pilot, sample_msg):
+        """Test request/reply functionality integration."""
+        reqreply = pilot.reqreply()
+        response_data = {"response": "success", "processed": True}
         
-        await connected_pilot.register_handler("test_subject", handler1, "handler1")
-        await connected_pilot.register_handler("test_subject", handler2, "handler2")
-        await connected_pilot.publish("test_subject", test_data)
+        async def request_handler(msg):
+            return response_data
         
-        # Wait a bit for the message to be processed
+        subject = "test.request"
+        reqreply.register_callback(subject, request_handler)
+        
+        result = await reqreply.request(subject, sample_msg)
+        
+        assert result == response_data
+        
+        # Test unregistration
+        reqreply.unregister_callback(subject)
+        
+        with pytest.raises(ValueError, match=f"No callback registered for {subject}"):
+            await reqreply.request(subject, sample_msg)
+
+    @pytest.mark.asyncio
+    async def test_multiple_subscribers(self, pilot, sample_msg):
+        """Test multiple subscribers to the same subject."""
+        pubsub = pilot.pubsub()
+        received_messages1 = []
+        received_messages2 = []
+        
+        async def handler1(msg):
+            received_messages1.append(msg)
+        
+        async def handler2(msg):
+            received_messages2.append(msg)
+        
+        subject = "test.subject"
+        pubsub.subscribe(subject, handler1)
+        pubsub.subscribe(subject, handler2)
+        
+        await pubsub.publish(subject, sample_msg)
+        
+        # Give some time for async processing
         await asyncio.sleep(0.1)
         
-        # Check if both handlers were called with the correct data
-        handler1.assert_called_once_with(test_data)
-        handler2.assert_called_once_with(test_data)
-        
+        assert len(received_messages1) == 1
+        assert len(received_messages2) == 1
+        assert received_messages1[0] == sample_msg
+        assert received_messages2[0] == sample_msg
+
     @pytest.mark.asyncio
-    async def test_publish_no_matching_handlers(self, connected_pilot):
-        """Test publishing to a subject with no handlers."""
-        test_data = {"key": "value"}
-        handler = AsyncMock()
+    async def test_handle_publish_error(self, pilot, sample_msg):
+        """Test error handling in _handle_publish."""
+        pubsub = pilot.pubsub()
         
-        # Register handler for a different subject
-        await connected_pilot.register_handler("other_subject", handler)
+        async def error_handler(msg):
+            raise ValueError("Test error")
         
-        # Publish to a subject with no handlers
-        await connected_pilot.publish("test_subject", test_data)
+        subject = "test.subject"
+        pubsub.subscribe(subject, error_handler)
         
-        # Wait a bit, but the handler should not be called
-        await asyncio.sleep(0.1)
-        handler.assert_not_called()
-        
+        with pytest.raises(ValueError, match="Test error"):
+            await pilot._handle_publish(subject, sample_msg)
+
     @pytest.mark.asyncio
-    async def test_handler_exception(self, connected_pilot):
-        """Test that exceptions in handlers are caught and don't affect other handlers."""
-        test_data = {"key": "value"}
-        error_handler = AsyncMock(side_effect=Exception("Test exception"))
-        normal_handler = AsyncMock()
+    async def test_handle_request_error(self, pilot, sample_msg):
+        """Test error handling in _handle_request."""
+        reqreply = pilot.reqreply()
         
-        await connected_pilot.register_handler("test_subject", error_handler, "error_handler")
-        await connected_pilot.register_handler("test_subject", normal_handler, "normal_handler")
+        async def error_handler(msg):
+            raise RuntimeError("Test request error")
         
-        with patch("hooklet.pilot.inproc_pilot.logger.error") as mock_error:
-            await connected_pilot.publish("test_subject", test_data)
-            # Wait for processing
-            await asyncio.sleep(0.1)
-            
-            # Error should be logged
-            mock_error.assert_called_once()
-            # But normal handler should still be called
-            normal_handler.assert_called_once_with(test_data)
-            
-    @pytest.mark.asyncio
-    async def test_publish_auto_connect(self, inproc_pilot):
-        """Test that publishing automatically connects if not already connected."""
-        test_data = {"key": "value"}
-        handler = AsyncMock()
+        subject = "test.subject"
+        reqreply.register_callback(subject, error_handler)
         
-        assert not inproc_pilot.is_connected()
-        
-        await inproc_pilot.register_handler("test_subject", handler)
-        await inproc_pilot.publish("test_subject", test_data)
-        
-        assert inproc_pilot.is_connected()
-        
-        # Wait a bit for the message to be processed
-        await asyncio.sleep(0.1)
-        
-        # Check if handler was called
-        handler.assert_called_once_with(test_data)
-        
-        # Clean up
-        await inproc_pilot.close()
+        with pytest.raises(RuntimeError, match="Test request error"):
+            await pilot._handle_request(subject, sample_msg)
+

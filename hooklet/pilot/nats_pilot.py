@@ -14,13 +14,13 @@ from typing import Any, Dict, List, Optional
 from nats.aio.client import Client as NATS
 from nats.aio.subscription import Subscription
 
-from hooklet.base import BasePilot
-from hooklet.types import MessageHandlerCallback
+from hooklet.base import Pilot
+from hooklet.base.types import MessageHandlerCallback
 
 logger = logging.getLogger(__name__)
 
 
-class NatsPilot(BasePilot):
+class NatsPilot(Pilot):
     """
     Class for managing NATS connections and message handlers.
 

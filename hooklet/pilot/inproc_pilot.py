@@ -4,7 +4,6 @@ from collections import defaultdict
 from typing import Any, Dict, Tuple
 from hooklet.base import Pilot, PubSub, ReqReply, AsyncCallback, Msg
 from hooklet.logger import get_logger
-from hooklet.utils import HeaderValidator
 
 logger = get_logger(__name__)
 
@@ -68,12 +67,10 @@ class InprocPilot(Pilot):
 
     async def connect(self) -> None:
         self._connected = True
-        self._pubsub._shutdown_event.clear()
         logger.info("InProcPilot connected")
 
     async def disconnect(self) -> None:
         self._connected = False
-        self._pubsub._shutdown_event.set()
         logger.info("InProcPilot disconnected")
 
     def pubsub(self) -> PubSub:
@@ -85,7 +82,7 @@ class InprocPilot(Pilot):
     async def _handle_publish(self, subject: str, data: Msg) -> None:
         try:
             subscriptions = self._pubsub.get_subscriptions(subject)
-            tasks = [callback(data) for _, callback in subscriptions.items()]
+            tasks = [callback(data) for callback in subscriptions]
             await asyncio.gather(*tasks)
         except Exception as e:
             logger.error(f"Error publishing to {subject}: {e}", exc_info=True)

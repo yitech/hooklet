@@ -7,8 +7,8 @@ from typing import Any, Dict, Optional
 import zmq
 from zmq.asyncio import Context, Socket
 
-from hooklet.base import BasePilot
-from hooklet.types import MessageHandlerCallback
+from hooklet.base import Pilot
+from hooklet.base.types import MessageHandlerCallback
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,7 @@ class ZmqBroker:
         logger.info("ZMQ Broker stopped")
 
 
-class ZmqPilot(BasePilot):
+class ZmqPilot(Pilot):
     """
     ZeroMQ implementation of BasePilot using PUB/SUB with broker pattern.
     Requires separate broker running with XSUB/XPUB or SUB/PUB proxy.
