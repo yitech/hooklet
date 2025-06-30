@@ -4,7 +4,7 @@ Hooklet Logger Package
 A simple logging system for the Hooklet framework.
 """
 
-from .eventrix_logger import get_eventrix_logger
+from .node_logger import get_node_logger
 from .hooklet_logger import (
     HookletLoggerConfig,
     HookletLogger,
@@ -25,7 +25,7 @@ __all__ = [
     "get_logger",
     "configure_logging",
     "log_performance",
-    "get_eventrix_logger",
+    "get_node_logger",
 ]
 
 # Default logger instance for convenience

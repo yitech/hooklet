@@ -11,18 +11,18 @@ from typing import Optional
 from .hooklet_logger import HookletLogger, HookletLoggerConfig
 
 
-class EventrixLoggerAdapter(logging.LoggerAdapter):
+class NodeLoggerAdapter(logging.LoggerAdapter):
     """Logger adapter that adds executor_id context to all log messages."""
 
-    def __init__(self, logger: logging.Logger, executor_id: str):
+    def __init__(self, logger: logging.Logger, node_name: str):
         """Initialize the adapter with executor context.
 
         Args:
             logger: Base logger instance
             executor_id: Unique identifier for the executor
         """
-        super().__init__(logger, {"executor_id": executor_id})
-        self.executor_id = executor_id
+        super().__init__(logger, {"node_name": node_name})
+        self.node_name = node_name
 
     def process(self, msg: str, kwargs: dict) -> tuple[str, dict]:
         """Process the log message to include executor context.
@@ -38,26 +38,26 @@ class EventrixLoggerAdapter(logging.LoggerAdapter):
         kwargs["extra"] = kwargs.get("extra", {})
 
         # Add executor_id to extra fields
-        kwargs["extra"]["executor_id"] = self.executor_id
+        kwargs["extra"]["node_name"] = self.node_name
 
         # Add executor context to message for non-JSON formats
         return f" {msg}", kwargs
 
 
-def get_eventrix_logger(
-    executor_id: str, config: Optional[HookletLoggerConfig] = None
+def get_node_logger(
+    node_name: str, config: Optional[HookletLoggerConfig] = None
 ) -> logging.LoggerAdapter:
-    """Get a logger for an Eventrix instance with executor_id context.
+    """Get a logger for an Node instance with node_name context.
 
     Args:
-        executor_id: Unique identifier for the executor
+        node_name: Unique identifier for the node
         config: Optional logger configuration. If None, uses default configuration.
 
     Returns:
         Logger adapter with executor context
     """
     # Get or create base logger with executor namespace
-    base_logger = HookletLogger(config).get_logger(f"eventrix.{executor_id}")
+    base_logger = HookletLogger(config).get_logger(f"node.{node_name}")
 
     # Create adapter with executor context
-    return EventrixLoggerAdapter(base_logger, executor_id)
+    return NodeLoggerAdapter(base_logger, node_name)

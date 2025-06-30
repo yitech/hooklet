@@ -1,5 +1,5 @@
 from enum import Enum
-import sys
+from hooklet.logger import get_logger
 from typing import Coroutine
 import asyncio
 from abc import ABC, abstractmethod
@@ -28,6 +28,7 @@ class Node:
             EventType.ERROR: [],
         }
         self.shutdown_event = asyncio.Event()
+        self.logger = get_logger(self.name)
         
     
     @property
@@ -50,7 +51,8 @@ class Node:
         """
         This method is called when the node is started. Expect as a blocking call.
         """
-        raise NotImplementedError("Subclasses must implement run()")
+        while not self.shutdown_event.is_set():
+            await asyncio.sleep(1)
 
     async def close(self):
         self.shutdown_event.set()
