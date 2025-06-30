@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Callable, Awaitable
 
-from hooklet.base.types import AsyncCallback, Msg
+from hooklet.base.types import Msg, Req, Reply
 
 class PubSub(ABC):
     """
@@ -9,14 +9,14 @@ class PubSub(ABC):
     """
 
     @abstractmethod
-    async def publish(self, subject: str, data: Msg) -> None:
+    async def publish(self, subject: str, msg: Msg) -> None:
         """
         Publish data to a specific subject.
         """
         raise NotImplementedError("Subclasses must implement publish()")
     
     @abstractmethod
-    def subscribe(self, subject: str, callback: AsyncCallback) -> int:
+    def subscribe(self, subject: str, callback: Callable[[Msg], Awaitable[Any]]) -> int:
         """
         Subscribe to a specific subject.
         """
@@ -33,14 +33,14 @@ class PubSub(ABC):
 class ReqReply(ABC):
 
     @abstractmethod
-    async def request(self, subject: str, data: Msg) -> Any:
+    async def request(self, subject: str, req: Req) -> Reply:
         """
         Request data from a specific subject.
         """
         raise NotImplementedError("Subclasses must implement request()")
 
     @abstractmethod
-    def register_callback(self, subject: str, callback: AsyncCallback) -> str:
+    def register_callback(self, subject: str, callback: Callable[[Req], Awaitable[Reply]]) -> str:
         """
         Register a callback for a specific subject.
         """

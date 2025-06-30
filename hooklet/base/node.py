@@ -18,7 +18,7 @@ class EventType(Enum):
 
 class Node:
     def __init__(self, name: str):
-        self.name = name
+        self._name = name
         self.task: asyncio.Task | None = None
         self.event_handlers: dict[EventType, list[Coroutine]] = {
             EventType.START: [],
@@ -27,12 +27,12 @@ class Node:
             EventType.ERROR: [],
         }
         self.shutdown_event = asyncio.Event()
-        self.logger = get_node_logger(self.name)
+        self.logger = get_node_logger(self._name)
         
     
     @property
     def name(self) -> str:
-        return self.name
+        return self._name
     
 
     @property

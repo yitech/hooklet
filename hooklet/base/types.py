@@ -1,7 +1,25 @@
-from typing import Any, Awaitable, Callable
+from typing import Any, TypedDict
 
-Msg = dict[str, Any]
-AsyncCallback = Callable[[Msg], Awaitable[Any]]
+class Msg(TypedDict):
+    _id: str
+    type: str
+    data: Any
+    error: str | None
+
+class Req(TypedDict):
+    _id: str
+    type: str
+    params: Any
+    error: str | None
+
+class Reply(TypedDict):
+    _id: str
+    type: str
+    result: Any
+    error: str | None
+    start_ms: int
+    end_ms: int
+
 
 
 
