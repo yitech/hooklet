@@ -182,7 +182,7 @@ class TestRPCServer:
     @pytest.mark.asyncio
     async def test_server_with_mock_reqreply(self):
         """Test server with mocked reqreply interface."""
-        mock_reqreply = AsyncMock()
+        mock_reqreply = MagicMock()
         server = self.MockRPCServer("test-server", mock_reqreply)
         
         await server.start()
