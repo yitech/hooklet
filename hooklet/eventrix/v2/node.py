@@ -78,10 +78,15 @@ class Node(BaseEventrix, ABC):
         Get the source generator.
         """
         try:
-            async for message in self.generator_func():
-                subject = self.router(message)
-                if subject is not None:
-                    await self.pilot.publish(subject, message.model_dump_json())
+            generator = self.generator_func()
+            while True:
+                try:
+                    message = await anext(generator)
+                    subject = self.router(message)
+                    if subject is not None:
+                        await self.pilot.publish(subject, message.model_dump_json())
+                except StopAsyncIteration:
+                    break
         except Exception as e:
             self.logger.error(f"Error in generator: {e}")
             await self.on_error(e)
