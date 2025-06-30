@@ -1,5 +1,5 @@
 from enum import Enum
-from hooklet.logger import get_logger
+from hooklet.logger import get_node_logger
 from typing import Coroutine
 import asyncio
 from abc import ABC, abstractmethod
@@ -28,7 +28,7 @@ class Node:
             EventType.ERROR: [],
         }
         self.shutdown_event = asyncio.Event()
-        self.logger = get_logger(self.name)
+        self.logger = get_node_logger(self.name)
         
     
     @property
