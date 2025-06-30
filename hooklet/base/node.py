@@ -22,7 +22,6 @@ class Node:
         self.task: asyncio.Task | None = None
         self.event_handlers: dict[EventType, list[Coroutine]] = {
             EventType.START: [],
-            EventType.MESSAGE: [],
             EventType.CLOSE: [],
             EventType.FINISH: [],
             EventType.ERROR: [],
@@ -56,6 +55,12 @@ class Node:
 
     async def close(self):
         self.shutdown_event.set()
+        
+
+    async def on_finish(self):
+        """
+        This method is called when the node is finished.
+        """
         await asyncio.wait_for(self.task, timeout=2)
         if self.task is not None and not self.task.done():
             self.task.cancel()
@@ -63,11 +68,6 @@ class Node:
                 await self.task
             except asyncio.CancelledError:
                 pass
-
-    async def on_finish(self):
-        """
-        This method is called when the node is finished.
-        """
         for coroutine in self.event_handlers[EventType.FINISH]:
             await coroutine
         self.event_handlers[EventType.FINISH].clear()
