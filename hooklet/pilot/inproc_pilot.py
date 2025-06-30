@@ -11,12 +11,7 @@ logger = get_logger(__name__)
 class InprocPubSub(PubSub):
     def __init__(self, pilot: 'InprocPilot') -> None:
         self._pilot = pilot
-        self._validator = HeaderValidator(pilot)
-        # Data processing queue
-        self._queue: asyncio.Queue[Tuple[str, Msg]] = asyncio.Queue()
         self._subscriptions: Dict[str, list[AsyncCallback]] = defaultdict(list)
-        self._consumer_task: asyncio.Task[None] = asyncio.create_task(self._consume())
-        self._shutdown_event = asyncio.Event()
 
     async def publish(self, subject: str, data: Msg) -> None:
         await self._pilot._handle_publish(subject, data)
