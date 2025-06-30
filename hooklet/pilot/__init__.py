@@ -1,5 +1,4 @@
-from .inproc_pilot import InProcPilot
+from .inproc_pilot import InprocPilot
 from .nats_pilot import NatsPilot
-from .zmq_pilot import ZmqBroker, ZmqPilot
 
-__all__ = ["NatsPilot", "InProcPilot", "ZmqPilot", "ZmqBroker"]
+__all__ = ["InprocPilot", "NatsPilot"]

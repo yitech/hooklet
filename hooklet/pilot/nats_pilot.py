@@ -1,223 +1,165 @@
-#!/usr/bin/env python3
-"""
-NATS Manager module for the hooklet
-
-This module provides a class to manage connections to NATS,
-register and unregister handler functions for NATS subjects.
-"""
-
-import json
-import logging
-import os
-from typing import Any, Dict, List, Optional
-
+import asyncio
+import uuid
+from typing import Any, Dict, Optional
 from nats.aio.client import Client as NATS
+from nats.aio.msg import Msg as NatsMsg
 from nats.aio.subscription import Subscription
+from hooklet.base import Pilot, PubSub, ReqReply, AsyncCallback, Msg
+from hooklet.logger import get_logger
 
-from hooklet.base import BasePilot
-from hooklet.types import MessageHandlerCallback
+logger = get_logger(__name__)
 
-logger = logging.getLogger(__name__)
+class NatsPubSub(PubSub):
+    def __init__(self, pilot: 'NatsPilot') -> None:
+        self._pilot = pilot
+        self._subscriptions: Dict[str, list[AsyncCallback]] = {}
+        self._nats_subscriptions: Dict[str, list[Subscription]] = {}
 
+    async def publish(self, subject: str, data: Msg) -> None:
+        if not self._pilot.is_connected():
+            raise RuntimeError("NATS client not connected")
+        import json
+        payload = json.dumps(data).encode()
+        await self._pilot._nats_client.publish(subject, payload)
+        logger.debug(f"Published to {subject}: {data}")
 
-class NatsPilot(BasePilot):
-    """
-    Class for managing NATS connections and message handlers.
+    async def subscribe(self, subject: str, callback: AsyncCallback) -> int:
+        if not self._pilot.is_connected():
+            raise RuntimeError("NATS client not connected")
+        subscription_id = hash(callback)
 
-    This class provides functionality to:
-    1. Connect to NATS server
-    2. Register async handler functions for specific subjects
-    3. Unregister handler functions
-    4. Publish messages to subjects
-    """
+        async def nats_callback(msg: NatsMsg):
+            try:
+                import json
+                data = json.loads(msg.data.decode())
+                await callback(data)
+            except Exception as e:
+                logger.error(f"Error in NATS subscription callback for {subject}: {e}", exc_info=True)
 
-    def __init__(self, nats_url: Optional[str] = None):
-        """
-        Initialize the NATS manager.
+        sub = await self._pilot._nats_client.subscribe(subject, cb=nats_callback)
+        if subject not in self._subscriptions:
+            self._subscriptions[subject] = []
+            self._nats_subscriptions[subject] = []
+        self._subscriptions[subject].append(callback)
+        self._nats_subscriptions[subject].append(sub)
+        logger.info(f"Subscribed to {subject} with ID {subscription_id}")
+        return subscription_id
 
-        Args:
-            nats_url: URL of the NATS server. If None, uses environment variable or default.
-        """
-        self.nats_url = nats_url or os.environ.get("NATS_URL", "nats://localhost:4222")
-        self.nc = NATS()
-        self._connected = False
-        self._subscriptions: Dict[str, Dict[str, Subscription]] = (
-            {}
-        )  # {subject: {handler_id: subscription}}
-        self._handlers: Dict[str, Dict[str, MessageHandlerCallback]] = (
-            {}
-        )  # {subject: {handler_id: handler_func}}
-
-    async def connect(self) -> None:
-        """
-        Connect to the NATS server.
-
-        Raises:
-            Exception: If connection to NATS server fails.
-        """
-        if self._connected:
-            logger.debug("Already connected to NATS")
-            return
-
-        logger.info(f"Connecting to NATS at {self.nats_url}")
+    async def unsubscribe(self, subject: str, subscription_id: int) -> bool:
+        if subject not in self._subscriptions:
+            return False
         try:
-            await self.nc.connect(self.nats_url)
-            self._connected = True
-            logger.info("Connected to NATS server successfully")
+            callback_to_remove = next(
+                callback for callback in self._subscriptions[subject]
+                if hash(callback) == subscription_id
+            )
+            index = self._subscriptions[subject].index(callback_to_remove)
+            self._subscriptions[subject].pop(index)
+            nats_sub = self._nats_subscriptions[subject].pop(index)
+            await nats_sub.unsubscribe()
+            if not self._subscriptions[subject]:
+                del self._subscriptions[subject]
+                del self._nats_subscriptions[subject]
+            logger.info(f"Unsubscribed from {subject} with ID {subscription_id}")
+            return True
+        except (StopIteration, ValueError):
+            return False
+
+    async def _cleanup(self) -> None:
+        for subject in list(self._subscriptions.keys()):
+            for nats_sub in self._nats_subscriptions[subject]:
+                await nats_sub.unsubscribe()
+            self._subscriptions[subject].clear()
+            self._nats_subscriptions[subject].clear()
+        self._subscriptions.clear()
+        self._nats_subscriptions.clear()
+
+class NatsReqReply(ReqReply):
+    def __init__(self, pilot: 'NatsPilot') -> None:
+        self._pilot = pilot
+        self._callbacks: Dict[str, AsyncCallback] = {}
+        self._nats_subscriptions: Dict[str, Subscription] = {}
+
+    async def request(self, subject: str, data: Msg) -> Any:
+        if not self._pilot.is_connected():
+            raise RuntimeError("NATS client not connected")
+        import json
+        payload = json.dumps(data).encode()
+        try:
+            response = await self._pilot._nats_client.request(subject, payload, timeout=30.0)
+            return json.loads(response.data.decode())
         except Exception as e:
-            logger.error(f"Failed to connect to NATS: {str(e)}")
+            logger.error(f"Error making request to {subject}: {e}", exc_info=True)
             raise
 
-    def is_connected(self) -> bool:
-        """
-        Check if the NATS connection is established.
-
-        Returns:
-            True if connected, False otherwise.
-        """
-        return self._connected
-
-    async def close(self) -> None:
-        """
-        Close the connection to the NATS server.
-        """
-        if self._connected:
-            logger.info("Closing NATS connection")
-            await self.nc.close()
-            self._connected = False
-            self._subscriptions = {}
-            self._handlers = {}
-
-    async def register_handler(
-        self, subject: str, handler: MessageHandlerCallback, handler_id: Optional[str] = None
-    ) -> str:
-        """
-        Register a handler function for a specific subject.
-
-        Args:
-            subject: NATS subject to subscribe to (can include wildcards).
-            handler: Async function to call when a message is received.
-            handler_id: Optional unique identifier for this handler. If not provided, uses
-                function name.
-
-        Returns:
-            Handler ID string.
-
-        Raises:
-            ValueError: If handler is not callable or if handler_id already exists for this subject.
-            RuntimeError: If not connected to NATS.
-        """
-        if not self._connected:
-            await self.connect()
-
-        if not callable(handler):
-            raise ValueError("Handler must be a callable function")
-
-        # Generate a handler ID if not provided
-        if handler_id is None:
-            handler_id = getattr(handler, "__name__", str(id(handler)))
-
-        # Initialize subject dictionaries if they don't exist
-        if subject not in self._subscriptions:
-            self._subscriptions[subject] = {}
-        if subject not in self._handlers:
-            self._handlers[subject] = {}
-
-        # Check if handler_id already exists for this subject
-        if handler_id in self._handlers[subject]:
-            raise ValueError(
-                f"Handler with ID '{handler_id}' already registered for subject '{subject}'"
-            )
-
-        # Define wrapper function to handle message decoding and pass to handler
-        async def message_wrapper(msg):
+    async def register_callback(self, subject: str, callback: AsyncCallback) -> str:
+        if not self._pilot.is_connected():
+            raise RuntimeError("NATS client not connected")
+        async def nats_callback(msg: NatsMsg):
             try:
-                # Decode message data
-                data = json.loads(msg.data.decode()) if msg.data else {}
-                # Call user-provided handler with the data
-                await handler(data)
+                import json
+                data = json.loads(msg.data.decode())
+                response = await callback(data)
+                response_payload = json.dumps(response).encode()
+                await msg.respond(response_payload)
             except Exception as e:
-                logger.error(f"Error in handler '{handler_id}' for subject '{subject}': {str(e)}")
+                logger.error(f"Error in NATS request callback for {subject}: {e}", exc_info=True)
+                error_response = {"error": str(e)}
+                await msg.respond(json.dumps(error_response).encode())
+        sub = await self._pilot._nats_client.subscribe(subject, cb=nats_callback)
+        self._callbacks[subject] = callback
+        self._nats_subscriptions[subject] = sub
+        logger.info(f"Registered callback for {subject}")
+        return subject
 
-        # Subscribe to the subject
-        sub = await self.nc.subscribe(subject, cb=message_wrapper)
-
-        # Store subscription and handler
-        self._subscriptions[subject][handler_id] = sub
-        self._handlers[subject][handler_id] = handler
-
-        logger.info(f"Registered handler '{handler_id}' for subject '{subject}'")
-        return handler_id
-
-    async def unregister_handler(self, handler_id: str) -> bool:
-        """
-        Unregister a handler function by its ID.
-
-        Args:
-            handler_id: Unique identifier of the handler to unregister.
-
-        Returns:
-            None
-        """
-        if not self._connected:
-            logger.warning("Not connected to NATS. Cannot unregister handler.")
-            return
-
-        # Search for the handler_id across all subjects
-        found = False
-        for subject in list(self._handlers.keys()):
-            if handler_id in self._handlers[subject]:
-                # Found the handler, now unsubscribe from NATS
-                sub = self._subscriptions[subject][handler_id]
+    async def unregister_callback(self, subject: str) -> None:
+        if subject in self._callbacks:
+            if subject in self._nats_subscriptions:
+                sub = self._nats_subscriptions[subject]
                 await sub.unsubscribe()
+                del self._nats_subscriptions[subject]
+            del self._callbacks[subject]
+            logger.info(f"Unregistered callback for {subject}")
 
-                # Remove subscription and handler
-                del self._subscriptions[subject][handler_id]
-                del self._handlers[subject][handler_id]
-                found = True
+    async def _cleanup(self) -> None:
+        for subject in list(self._callbacks.keys()):
+            await self.unregister_callback(subject)
 
-                # Clean up empty dictionaries
-                if not self._subscriptions[subject]:
-                    del self._subscriptions[subject]
-                if not self._handlers[subject]:
-                    del self._handlers[subject]
+class NatsPilot(Pilot):
+    def __init__(self, nats_url: str = "nats://localhost:4222", **kwargs) -> None:
+        super().__init__()
+        self._nats_url = nats_url
+        self._nats_client = NATS()
+        self._connected = False
+        self._pubsub = NatsPubSub(self)
+        self._reqreply = NatsReqReply(self)
+        self._kwargs = kwargs
 
-                logger.info(f"Unregistered handler '{handler_id}' from subject '{subject}'")
-                break
+    def is_connected(self) -> bool:
+        return self._connected and self._nats_client.is_connected
 
-        if not found:
-            logger.warning(f"Handler '{handler_id}' not found")
-        return found
+    async def connect(self) -> None:
+        try:
+            await self._nats_client.connect(self._nats_url, **self._kwargs)
+            self._connected = True
+            logger.info(f"NatsPilot connected to {self._nats_url}")
+        except Exception as e:
+            logger.error(f"Failed to connect to NATS at {self._nats_url}: {e}", exc_info=True)
+            raise
 
-    async def publish(self, subject: str, data: Any) -> None:
-        """
-        Publish a message to a subject.
+    async def disconnect(self) -> None:
+        try:
+            await self._pubsub._cleanup()
+            await self._reqreply._cleanup()
+            await self._nats_client.close()
+            self._connected = False
+            logger.info("NatsPilot disconnected")
+        except Exception as e:
+            logger.error(f"Error disconnecting from NATS: {e}", exc_info=True)
+            raise
 
-        Args:
-            subject: NATS subject to publish to.
-            data: Data to publish (will be JSON encoded).
+    def pubsub(self) -> NatsPubSub:
+        return self._pubsub
 
-        Raises:
-            RuntimeError: If not connected to NATS.
-        """
-        if not self._connected:
-            await self.connect()
-
-        # Convert data to JSON and encode as bytes
-        encoded_data = json.dumps(data).encode()
-
-        # Publish to NATS
-        await self.nc.publish(subject, encoded_data)
-        logger.debug(f"Published message to '{subject}'")
-
-    def get_registered_handlers(self) -> Dict[str, List[str]]:
-        """
-        Get a dictionary of all registered handlers.
-
-        Returns:
-            Dictionary mapping subjects to lists of handler IDs.
-        """
-        result = {}
-        for subject, handlers in self._handlers.items():
-            result[subject] = list(handlers.keys())
-        return result
+    def reqreply(self) -> NatsReqReply:
+        return self._reqreply
