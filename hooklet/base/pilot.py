@@ -16,14 +16,14 @@ class PubSub(ABC):
         raise NotImplementedError("Subclasses must implement publish()")
     
     @abstractmethod
-    def subscribe(self, subject: str, callback: Callable[[Msg], Awaitable[Any]]) -> int:
+    async def subscribe(self, subject: str, callback: Callable[[Msg], Awaitable[Any]]) -> int:
         """
         Subscribe to a specific subject.
         """
         raise NotImplementedError("Subclasses must implement subscribe()")
     
     @abstractmethod
-    def unsubscribe(self, subject: str, subscription_id: int) -> bool:
+    async def unsubscribe(self, subject: str, subscription_id: int) -> bool:
         """
         Unsubscribe from a specific subject.
         """
@@ -40,11 +40,18 @@ class ReqReply(ABC):
         raise NotImplementedError("Subclasses must implement request()")
 
     @abstractmethod
-    async def register_callback(self, subject: str, callback: Callable[[Req], Awaitable[Reply]]) -> str:
+    async def register_callback(self, subject: str, callback: Callable[[Req], Awaitable[Reply]]) -> None:
         """
         Register a callback for a specific subject.
         """
         raise NotImplementedError("Subclasses must implement register_callback()")
+    
+    @abstractmethod
+    async def unregister_callback(self, subject: str, callback_id: int) -> bool:
+        """
+        Unregister a callback for a specific subject.
+        """
+        raise NotImplementedError("Subclasses must implement unregister_callback()")
     
 class PushPull(ABC):
 
