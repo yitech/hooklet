@@ -22,7 +22,20 @@ class Emitter(Node, ABC):
         raise NotImplementedError("Subclasses must implement emit()")
 
     async def run(self):
-        while self.is_running:
+        emit_gen = None
+        try:
+            emit_gen = self.emit()
             async for msg in self.emit():
+                if self.shutdown_event.is_set():
+                    break
                 subject = self.router(msg)
                 await self.pubsub.publish(subject, msg)
+        except Exception as e:
+            await self.on_error(e)
+        finally:
+            # Ensure the generator is properly closed
+            if emit_gen is not None:
+                try:
+                    await emit_gen.aclose()
+                except:
+                    pass
