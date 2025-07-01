@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Awaitable
 
-from hooklet.base.types import Msg, Req, Reply
+from hooklet.base.types import Job, Msg, Req, Reply
 
 class PubSub(ABC):
     """
@@ -45,6 +45,35 @@ class ReqReply(ABC):
         Register a callback for a specific subject.
         """
         raise NotImplementedError("Subclasses must implement register_callback()")
+    
+class PushPull(ABC):
+    @abstractmethod
+    async def push(self, subject: str, job: Job) -> bool:
+        """
+        Push data to a specific subject.
+        """
+        raise NotImplementedError("Subclasses must implement push()")
+    
+    @abstractmethod
+    async def register_worker(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
+        """
+        Register a worker for a specific subject.
+        """
+        raise NotImplementedError("Subclasses must implement register_worker()")
+    
+    @abstractmethod
+    async def unregister_worker(self, subject: str, worker_id: int) -> bool:
+        """
+        Unregister a worker for a specific subject.
+        """
+        raise NotImplementedError("Subclasses must implement unregister_worker()")
+    
+    @abstractmethod
+    async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> None:
+        """
+        Subscribe to a specific subject.
+        """
+        raise NotImplementedError("Subclasses must implement subscribe()")
 
 
 class Pilot(ABC):
