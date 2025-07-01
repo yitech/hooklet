@@ -40,7 +40,7 @@ class ReqReply(ABC):
         raise NotImplementedError("Subclasses must implement request()")
 
     @abstractmethod
-    def register_callback(self, subject: str, callback: Callable[[Req], Awaitable[Reply]]) -> str:
+    async def register_callback(self, subject: str, callback: Callable[[Req], Awaitable[Reply]]) -> str:
         """
         Register a callback for a specific subject.
         """

@@ -11,7 +11,7 @@ class RPCServer(Node, ABC):
 
     async def start(self):
         await super().start()
-        self.reqreply.register_callback(self.name, self.callback)
+        await self.reqreply.register_callback(self.name, self.callback)
 
     @abstractmethod
     async def callback(self, req: Req) -> Reply:

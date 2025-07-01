@@ -47,7 +47,7 @@ class InprocReqReply(ReqReply):
             raise ValueError(f"No callback registered for {subject}")
         return await self._callbacks[subject](data)
     
-    def register_callback(self, subject: str, callback: Callable[[Any], Awaitable[Any]]) -> str:
+    async def register_callback(self, subject: str, callback: Callable[[Any], Awaitable[Any]]) -> str:
         self._callbacks[subject] = callback
         return subject
     
