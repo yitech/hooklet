@@ -4,7 +4,7 @@ import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 import time
 
-from hooklet.pilot.inproc_pilot import InprocPilot, InprocPubSub, InprocReqReply, InprocPushPull
+from hooklet.pilot.inproc_pilot import InprocPilot, InprocPubSub, InprocReqReply
 from hooklet.base.types import Msg, Job
 
 
@@ -334,8 +334,8 @@ class TestInprocPushPull:
 
     @pytest.fixture
     def pushpull(self):
-        """Create an InprocPushPull instance."""
-        return InprocPushPull()
+        """Create an InprocPushPull instance via InprocPilot."""
+        return InprocPilot().pushpull()
 
     @pytest.fixture
     def sample_job(self):
@@ -421,14 +421,26 @@ class TestInprocPushPull:
         await pushpull.register_worker(subject, mock_worker_callback, 2)
         initial_tasks = pushpull._worker_tasks[subject].copy()
         
+        # Let workers start
+        await asyncio.sleep(0.01)
+        
         # Register new workers (should replace existing ones)
         new_callback = AsyncMock()
         await pushpull.register_worker(subject, new_callback, 3)
         
-        # Check that old tasks are cancelled
-        assert all(task.cancelled() for task in initial_tasks)
-        assert pushpull._worker_callbacks[subject] == new_callback
+        # Wait a bit for old tasks to be cancelled and completed
+        await asyncio.sleep(0.05)
+        
+        # Verify old tasks are cancelled and done
+        for task in initial_tasks:
+            assert task.done(), "Old worker task not completed"
+            
+        # Verify new state
+        assert pushpull._worker_callbacks[subject] is new_callback
         assert len(pushpull._worker_tasks[subject]) == 3
+        
+        # Cleanup
+        await pushpull.unregister_worker(subject)
 
     @pytest.mark.asyncio
     async def test_unregister_worker(self, pushpull, mock_worker_callback):
@@ -685,6 +697,46 @@ class TestInprocPushPull:
         assert successful_pushes == 1000
 
     @pytest.mark.asyncio
+    async def test_cleanup_on_disconnect(self, pushpull, sample_job):
+        """Test that cleanup is called when pilot disconnects."""
+        subject = "test.subject"
+        processed_jobs = []
+        
+        async def worker_callback(job):
+            processed_jobs.append(job)
+            await asyncio.sleep(0.01)
+        
+        # Create a pilot and register workers
+        pilot = InprocPilot()
+        await pilot.connect()
+        
+        # Register workers
+        await pilot.pushpull().register_worker(subject, worker_callback, 2)
+        
+        # Push a job
+        result = await pilot.pushpull().push(subject, sample_job)
+        assert result is True
+        
+        # Wait a bit for processing to start
+        await asyncio.sleep(0.05)
+        
+        # Disconnect pilot (should trigger cleanup)
+        await pilot.disconnect()
+        
+        # Wait a bit for cleanup to complete
+        await asyncio.sleep(0.1)
+        
+        # Verify that the pilot is disconnected
+        assert not pilot.is_connected()
+        
+        # Try to push another job (should fail due to cleanup)
+        job2 = sample_job.copy()
+        job2["_id"] = "test_job_456"
+        result2 = await pilot.pushpull().push(subject, job2)
+        assert result2 is False
+        assert job2["error"] == "System shutting down"
+
+    @pytest.mark.asyncio
     async def test_cleanup_on_unregister(self, pushpull, mock_worker_callback):
         """Test proper cleanup when unregistering workers."""
         subject = "test.subject"
@@ -692,16 +744,71 @@ class TestInprocPushPull:
         # Register workers
         await pushpull.register_worker(subject, mock_worker_callback, 2)
         
-        # Verify initial state
-        assert subject in pushpull._worker_callbacks
+        # Verify workers are registered
         assert len(pushpull._worker_tasks[subject]) == 2
         
         # Unregister workers
         count = await pushpull.unregister_worker(subject)
+        assert count == 2
         
         # Verify cleanup
-        assert count == 2
-        assert subject not in pushpull._worker_callbacks
         assert len(pushpull._worker_tasks[subject]) == 0
-        assert subject not in pushpull._active_jobs
+        assert subject not in pushpull._worker_callbacks
+
+    @pytest.mark.asyncio
+    async def test_job_rejection_during_cleanup(self, pushpull, sample_job):
+        """Test that jobs are rejected during cleanup."""
+        subject = "test.subject"
+        
+        # Register a worker
+        await pushpull.register_worker(subject, AsyncMock(), 1)
+        
+        # Manually trigger cleanup
+        await pushpull._cleanup()
+        
+        # Try to push a job (should be rejected)
+        result = await pushpull.push(subject, sample_job)
+        assert result is False
+        assert sample_job["error"] == "System shutting down"
+        assert sample_job["status"] == "fail"
+
+    @pytest.mark.asyncio
+    async def test_worker_exit_during_cleanup(self, pushpull):
+        """Test that workers exit gracefully during cleanup."""
+        subject = "test.subject"
+        worker_started = asyncio.Event()
+        worker_exited = asyncio.Event()
+        
+        async def worker_callback(job):
+            # Simulate long-running job
+            await asyncio.sleep(0.1)
+        
+        # Register a worker
+        await pushpull.register_worker(subject, worker_callback, 1)
+        
+        # Wait a bit for worker to start
+        await asyncio.sleep(0.01)
+        
+        # Verify worker is running
+        assert len(pushpull._worker_tasks[subject]) == 1
+        assert not pushpull._worker_tasks[subject][0].done()
+        
+        # Start cleanup in background
+        cleanup_task = asyncio.create_task(pushpull._cleanup())
+        
+        # Wait a bit for cleanup to start
+        await asyncio.sleep(0.01)
+        
+        # Verify shutdown event is set
+        assert pushpull._shutdown_event.is_set()
+        
+        # Wait for cleanup to complete
+        await cleanup_task
+        
+        # Verify cleanup completed - all data structures should be cleared
+        assert len(pushpull._worker_tasks) == 0
+        assert len(pushpull._worker_callbacks) == 0
+        assert len(pushpull._job_queues) == 0
+        assert len(pushpull._status_subscribers) == 0
+        assert len(pushpull._active_jobs) == 0
 

@@ -63,14 +63,14 @@ class PushPull(ABC):
         raise NotImplementedError("Subclasses must implement push()")
     
     @abstractmethod
-    async def register_worker(self, subject: str, callback: Callable[[Job], Awaitable[Any]], n_workers: int = 1) -> int:
+    async def register_worker(self, subject: str, callback: Callable[[Job], Awaitable[Any]], n_workers: int = 1) -> None:
         """
         Register a worker for a specific subject.
         """
         raise NotImplementedError("Subclasses must implement register_worker()")
     
     @abstractmethod
-    async def unregister_worker(self, subject: str) -> bool:
+    async def unregister_worker(self, subject: str) -> int:
         """
         Unregister a worker for a specific subject.
         """
