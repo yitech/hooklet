@@ -8,7 +8,7 @@ from hooklet.base.node import Node
 
 class Pipe(Node, ABC):
     def __init__(self, name: str, subscribes: list[str], pubsub: PubSub, router: Callable[[Msg], str]):
-        self.name = name
+        super().__init__(name)
         self.subscribes = subscribes
         self.pubsub = pubsub
         self.router = router
@@ -36,4 +36,6 @@ class Pipe(Node, ABC):
                         await self.pubsub.publish(subject, msg)
             except asyncio.TimeoutError:
                 pass
+            except Exception as e:
+                await self.on_error(e)
     
