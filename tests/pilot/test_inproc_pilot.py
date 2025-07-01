@@ -200,7 +200,7 @@ class TestInprocReqReply:
     async def test_register_callback(self, reqreply, mock_callback):
         """Test registering a callback."""
         subject = "test.subject"
-        result = reqreply.register_callback(subject, mock_callback)
+        result = await reqreply.register_callback(subject, mock_callback)
         
         assert result == subject
         assert reqreply._callbacks[subject] == mock_callback
@@ -209,7 +209,7 @@ class TestInprocReqReply:
     async def test_request_success(self, reqreply, mock_callback, sample_msg):
         """Test successful request."""
         subject = "test.subject"
-        reqreply.register_callback(subject, mock_callback)
+        await reqreply.register_callback(subject, mock_callback)
         
         result = await reqreply.request(subject, sample_msg)
         
@@ -224,10 +224,11 @@ class TestInprocReqReply:
         with pytest.raises(ValueError, match=f"No callback registered for {subject}"):
             await reqreply.request(subject, sample_msg)
 
-    def test_unregister_callback(self, reqreply, mock_callback):
+    @pytest.mark.asyncio
+    async def test_unregister_callback(self, reqreply, mock_callback):
         """Test unregistering a callback."""
         subject = "test.subject"
-        reqreply.register_callback(subject, mock_callback)
+        await reqreply.register_callback(subject, mock_callback)
         
         assert subject in reqreply._callbacks
         
@@ -292,7 +293,7 @@ class TestInprocPilotIntegration:
             return response_data
         
         subject = "test.request"
-        reqreply.register_callback(subject, request_handler)
+        await reqreply.register_callback(subject, request_handler)
         
         result = await reqreply.request(subject, sample_msg)
         
@@ -354,7 +355,7 @@ class TestInprocPilotIntegration:
             raise RuntimeError("Test request error")
         
         subject = "test.subject"
-        reqreply.register_callback(subject, error_handler)
+        await reqreply.register_callback(subject, error_handler)
         
         with pytest.raises(RuntimeError, match="Test request error"):
             await pilot._handle_request(subject, sample_msg)
