@@ -6,8 +6,9 @@ import asyncio
 from hooklet.base.node import Node
 
 class Pipe(Node, ABC):
-    def __init__(self, name: str, pubsub: PubSub, router: Callable[[Msg], str]):
+    def __init__(self, name: str, subscribes: list[str], pubsub: PubSub, router: Callable[[Msg], str]):
         self.name = name
+        self.subscribes = subscribes
         self.pubsub = pubsub
         self.router = router
         self.queue: asyncio.Queue[Msg] = asyncio.Queue()
@@ -15,7 +16,8 @@ class Pipe(Node, ABC):
 
     async def start(self):
         await super().start()
-        self.pubsub.subscribe(self.name, self.queue.put)
+        for subscribe in self.subscribes:
+            self.pubsub.subscribe(subscribe, self.queue.put)
 
     @abstractmethod
     async def pipe(self, msg: Msg) -> AsyncGenerator[Msg, None]:
