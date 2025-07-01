@@ -2,9 +2,10 @@ import asyncio
 import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
+import time
 
-from hooklet.pilot.inproc_pilot import InprocPilot, InprocPubSub, InprocReqReply
-from hooklet.base.types import Msg
+from hooklet.pilot.inproc_pilot import InprocPilot, InprocPubSub, InprocReqReply, InprocPushPull
+from hooklet.base.types import Msg, Job
 
 
 class TestInprocPilot:
@@ -326,4 +327,381 @@ class TestInprocPilotIntegration:
         assert len(received_messages2) == 1
         assert received_messages1[0] == sample_msg
         assert received_messages2[0] == sample_msg
+
+
+class TestInprocPushPull:
+    """Test cases for InprocPushPull class."""
+
+    @pytest.fixture
+    def pushpull(self):
+        """Create an InprocPushPull instance."""
+        return InprocPushPull()
+
+    @pytest.fixture
+    def sample_job(self):
+        """Create a sample job for testing."""
+        return {
+            "_id": "test_job_123",
+            "type": "test_job",
+            "data": {"test": "data"},
+            "error": None,
+            "start_ms": 0,
+            "end_ms": 0,
+            "status": "pending",
+            "retry_count": 0
+        }
+
+    @pytest.fixture
+    def mock_worker_callback(self):
+        """Create a mock worker callback."""
+        return AsyncMock()
+
+    @pytest.fixture
+    def mock_status_callback(self):
+        """Create a mock status callback."""
+        return AsyncMock()
+
+    def test_init(self, pushpull):
+        """Test InprocPushPull initialization."""
+        assert pushpull._job_queues == {}
+        assert pushpull._worker_tasks == {}
+        assert pushpull._worker_callbacks == {}
+        assert pushpull._status_subscribers == {}
+        assert pushpull._active_jobs == {}
+        assert pushpull._worker_locks == {}
+
+    @pytest.mark.asyncio
+    async def test_push_success(self, pushpull, sample_job):
+        """Test successful job push."""
+        subject = "test.subject"
+        result = await pushpull.push(subject, sample_job)
+        
+        assert result is True
+        assert sample_job["status"] == "new"
+        assert "recv_ms" in sample_job
+        assert sample_job["recv_ms"] > 0
+
+    @pytest.mark.asyncio
+    async def test_push_queue_full(self, pushpull, sample_job):
+        """Test job push when queue is full."""
+        subject = "test.subject"
+        
+        # Fill the queue
+        queue = pushpull._job_queues[subject]
+        for i in range(1000):
+            job = sample_job.copy()
+            job["_id"] = f"job_{i}"
+            await queue.put(job)
+        
+        # Try to push one more job
+        result = await pushpull.push(subject, sample_job)
+        
+        assert result is False
+        assert sample_job["status"] == "fail"
+        assert sample_job["error"] == "Queue full"
+
+    @pytest.mark.asyncio
+    async def test_register_worker(self, pushpull, mock_worker_callback):
+        """Test worker registration."""
+        subject = "test.subject"
+        n_workers = 3
+        
+        await pushpull.register_worker(subject, mock_worker_callback, n_workers)
+        
+        assert pushpull._worker_callbacks[subject] == mock_worker_callback
+        assert len(pushpull._worker_tasks[subject]) == n_workers
+        assert all(task.done() is False for task in pushpull._worker_tasks[subject])
+
+    @pytest.mark.asyncio
+    async def test_register_worker_replace_existing(self, pushpull, mock_worker_callback):
+        """Test replacing existing workers."""
+        subject = "test.subject"
+        
+        # Register initial workers
+        await pushpull.register_worker(subject, mock_worker_callback, 2)
+        initial_tasks = pushpull._worker_tasks[subject].copy()
+        
+        # Register new workers (should replace existing ones)
+        new_callback = AsyncMock()
+        await pushpull.register_worker(subject, new_callback, 3)
+        
+        # Check that old tasks are cancelled
+        assert all(task.cancelled() for task in initial_tasks)
+        assert pushpull._worker_callbacks[subject] == new_callback
+        assert len(pushpull._worker_tasks[subject]) == 3
+
+    @pytest.mark.asyncio
+    async def test_unregister_worker(self, pushpull, mock_worker_callback):
+        """Test worker unregistration."""
+        subject = "test.subject"
+        
+        # Register workers first
+        await pushpull.register_worker(subject, mock_worker_callback, 2)
+        assert len(pushpull._worker_tasks[subject]) == 2
+        
+        # Unregister workers
+        count = await pushpull.unregister_worker(subject)
+        
+        assert count == 2
+        assert len(pushpull._worker_tasks[subject]) == 0
+        assert subject not in pushpull._worker_callbacks
+
+    @pytest.mark.asyncio
+    async def test_unregister_worker_nonexistent(self, pushpull):
+        """Test unregistering non-existent workers."""
+        subject = "test.subject"
+        count = await pushpull.unregister_worker(subject)
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_subscribe_status(self, pushpull, mock_status_callback):
+        """Test status subscription."""
+        subject = "test.subject"
+        subscription_id = await pushpull.subscribe(subject, mock_status_callback)
+        
+        assert subscription_id == hash(mock_status_callback)
+        assert mock_status_callback in pushpull._status_subscribers[subject]
+
+    @pytest.mark.asyncio
+    async def test_unsubscribe_status(self, pushpull, mock_status_callback):
+        """Test status unsubscription."""
+        subject = "test.subject"
+        subscription_id = await pushpull.subscribe(subject, mock_status_callback)
+        
+        result = await pushpull.unsubscribe(subject, subscription_id)
+        
+        assert result is True
+        assert mock_status_callback not in pushpull._status_subscribers[subject]
+
+    @pytest.mark.asyncio
+    async def test_unsubscribe_status_nonexistent(self, pushpull):
+        """Test unsubscribing from non-existent subscription."""
+        subject = "test.subject"
+        result = await pushpull.unsubscribe(subject, 99999)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_job_processing_lifecycle(self, pushpull, sample_job):
+        """Test complete job processing lifecycle."""
+        subject = "test.subject"
+        processed_jobs = []
+        
+        async def worker_callback(job):
+            processed_jobs.append(job)
+            await asyncio.sleep(0.01)  # Simulate processing time
+        
+        # Register worker
+        await pushpull.register_worker(subject, worker_callback, 1)
+        
+        # Push job
+        result = await pushpull.push(subject, sample_job)
+        assert result is True
+        
+        # Wait for processing
+        await asyncio.sleep(0.1)
+        
+        # Check job lifecycle
+        assert len(processed_jobs) == 1
+        processed_job = processed_jobs[0]
+        assert processed_job["_id"] == sample_job["_id"]
+        assert processed_job["status"] == "finish"
+        assert processed_job["end_ms"] > processed_job["start_ms"]
+
+    @pytest.mark.asyncio
+    async def test_job_status_notifications(self, pushpull, sample_job, mock_status_callback):
+        """Test job status notifications."""
+        subject = "test.subject"
+        
+        # Subscribe to status changes
+        await pushpull.subscribe(subject, mock_status_callback)
+        
+        # Register worker
+        async def worker_callback(job):
+            await asyncio.sleep(0.01)
+        
+        await pushpull.register_worker(subject, worker_callback, 1)
+        
+        # Push job
+        await pushpull.push(subject, sample_job)
+        
+        # Wait for processing
+        await asyncio.sleep(0.1)
+        
+        # Check that status callback was called multiple times
+        assert mock_status_callback.call_count >= 3  # new, processing, finish
+
+    @pytest.mark.asyncio
+    async def test_job_processing_error(self, pushpull, sample_job):
+        """Test job processing with error."""
+        subject = "test.subject"
+        processed_jobs = []
+        
+        async def worker_callback(job):
+            processed_jobs.append(job)
+            raise Exception("Processing error")
+        
+        # Register worker
+        await pushpull.register_worker(subject, worker_callback, 1)
+        
+        # Push job
+        result = await pushpull.push(subject, sample_job)
+        assert result is True
+        
+        # Wait for processing
+        await asyncio.sleep(0.1)
+        
+        # Check job error status
+        assert len(processed_jobs) == 1
+        processed_job = processed_jobs[0]
+        assert processed_job["status"] == "fail"
+        assert processed_job["error"] == "Processing error"
+
+    @pytest.mark.asyncio
+    async def test_multiple_workers(self, pushpull):
+        """Test multiple workers processing jobs."""
+        subject = "test.subject"
+        processed_jobs = []
+        
+        async def worker_callback(job):
+            processed_jobs.append(job)
+            await asyncio.sleep(0.01)
+        
+        # Register multiple workers
+        await pushpull.register_worker(subject, worker_callback, 3)
+        
+        # Push multiple jobs
+        for i in range(5):
+            job = {
+                "_id": f"job_{i}",
+                "type": "test_job",
+                "data": {"index": i},
+                "error": None,
+                "start_ms": 0,
+                "end_ms": 0,
+                "status": "pending",
+                "retry_count": 0
+            }
+            await pushpull.push(subject, job)
+        
+        # Wait for processing
+        await asyncio.sleep(0.2)
+        
+        # Check that all jobs were processed
+        assert len(processed_jobs) == 5
+        job_ids = {job["_id"] for job in processed_jobs}
+        expected_ids = {f"job_{i}" for i in range(5)}
+        assert job_ids == expected_ids
+
+    @pytest.mark.asyncio
+    async def test_worker_cancellation(self, pushpull, sample_job):
+        """Test worker cancellation during processing."""
+        subject = "test.subject"
+        processing_started = asyncio.Event()
+        processing_completed = asyncio.Event()
+        
+        async def worker_callback(job):
+            processing_started.set()
+            await asyncio.sleep(0.1)  # Long processing time
+            processing_completed.set()
+        
+        # Register worker
+        await pushpull.register_worker(subject, worker_callback, 1)
+        
+        # Push job
+        await pushpull.push(subject, sample_job)
+        
+        # Wait for processing to start
+        await processing_started.wait()
+        
+        # Unregister workers (should cancel them)
+        count = await pushpull.unregister_worker(subject)
+        assert count == 1
+        
+        # Check that tasks are cancelled
+        assert all(task.cancelled() for task in pushpull._worker_tasks[subject])
+
+    @pytest.mark.asyncio
+    async def test_concurrent_subjects(self, pushpull):
+        """Test processing jobs on multiple subjects concurrently."""
+        subjects = ["subject1", "subject2", "subject3"]
+        results = {subject: [] for subject in subjects}
+        
+        async def worker_callback(job, subject_name):
+            results[subject_name].append(job)
+            await asyncio.sleep(0.01)
+        
+        # Register workers for each subject
+        for subject in subjects:
+            await pushpull.register_worker(subject, lambda job, s=subject: worker_callback(job, s), 1)
+        
+        # Push jobs to all subjects
+        for i in range(3):
+            for subject in subjects:
+                job = {
+                    "_id": f"{subject}_job_{i}",
+                    "type": "test_job",
+                    "data": {"subject": subject, "index": i},
+                    "error": None,
+                    "start_ms": 0,
+                    "end_ms": 0,
+                    "status": "pending",
+                    "retry_count": 0
+                }
+                await pushpull.push(subject, job)
+        
+        # Wait for processing
+        await asyncio.sleep(0.2)
+        
+        # Check that all jobs were processed
+        for subject in subjects:
+            assert len(results[subject]) == 3
+            job_ids = {job["_id"] for job in results[subject]}
+            expected_ids = {f"{subject}_job_{i}" for i in range(3)}
+            assert job_ids == expected_ids
+
+    @pytest.mark.asyncio
+    async def test_queue_size_limit(self, pushpull):
+        """Test that queue size limit is enforced."""
+        subject = "test.subject"
+        
+        # Try to push more jobs than queue capacity
+        successful_pushes = 0
+        for i in range(1001):  # Queue max size is 1000
+            job = {
+                "_id": f"job_{i}",
+                "type": "test_job",
+                "data": {"index": i},
+                "error": None,
+                "start_ms": 0,
+                "end_ms": 0,
+                "status": "pending",
+                "retry_count": 0
+            }
+            result = await pushpull.push(subject, job)
+            if result:
+                successful_pushes += 1
+        
+        # Should have exactly 1000 successful pushes
+        assert successful_pushes == 1000
+
+    @pytest.mark.asyncio
+    async def test_cleanup_on_unregister(self, pushpull, mock_worker_callback):
+        """Test proper cleanup when unregistering workers."""
+        subject = "test.subject"
+        
+        # Register workers
+        await pushpull.register_worker(subject, mock_worker_callback, 2)
+        
+        # Verify initial state
+        assert subject in pushpull._worker_callbacks
+        assert len(pushpull._worker_tasks[subject]) == 2
+        
+        # Unregister workers
+        count = await pushpull.unregister_worker(subject)
+        
+        # Verify cleanup
+        assert count == 2
+        assert subject not in pushpull._worker_callbacks
+        assert len(pushpull._worker_tasks[subject]) == 0
+        assert subject not in pushpull._active_jobs
 

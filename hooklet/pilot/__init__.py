@@ -1,4 +1,4 @@
-from .inproc_pilot import InprocPilot
+from .inproc_pilot import InprocPilot, InprocPushPull
 from .nats_pilot import NatsPilot
 
-__all__ = ["InprocPilot", "NatsPilot"]
+__all__ = ["InprocPilot", "InprocPushPull", "NatsPilot"]

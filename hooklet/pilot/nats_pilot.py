@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional, Callable, Awaitable
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg as NatsMsg
 from nats.aio.subscription import Subscription
-from hooklet.base import Pilot, PubSub, ReqReply, Msg
+from hooklet.base import Pilot, PubSub, ReqReply, Msg, Job, PushPull
 from hooklet.logger import get_logger
 
 logger = get_logger(__name__)
@@ -125,6 +125,26 @@ class NatsReqReply(ReqReply):
         for subject in list(self._callbacks.keys()):
             await self.unregister_callback(subject)
 
+class NatsPushPull(PushPull):
+    def __init__(self, pilot: 'NatsPilot') -> None:
+        self._pilot = pilot
+        self._workers: Dict[str, list[Callable[[Job], Awaitable[Any]]]] = {}
+    
+    async def push(self, subject: str, job: Job) -> bool:
+        raise NotImplementedError("NatsPushPull.push is not implemented")
+    
+    async def register_worker(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
+        raise NotImplementedError("NatsPushPull.register_worker is not implemented")
+    
+    async def unregister_worker(self, subject: str, worker_id: int) -> bool:
+        raise NotImplementedError("NatsPushPull.unregister_worker is not implemented")
+    
+    async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
+        raise NotImplementedError("NatsPushPull.subscribe is not implemented")
+    
+    async def unsubscribe(self, subject: str, subscription_id: int) -> bool:
+        raise NotImplementedError("NatsPushPull.unsubscribe is not implemented")
+
 class NatsPilot(Pilot):
     def __init__(self, nats_url: str = "nats://localhost:4222", **kwargs) -> None:
         super().__init__()
@@ -163,3 +183,6 @@ class NatsPilot(Pilot):
 
     def reqreply(self) -> NatsReqReply:
         return self._reqreply
+    
+    def pushpull(self) -> NatsPushPull:
+        return self._pushpull

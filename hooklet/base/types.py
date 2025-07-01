@@ -25,6 +25,7 @@ class Job(TypedDict):
     type: str
     data: Any
     error: str | None
+    recv_ms: int
     start_ms: int
     end_ms: int
     status: str
