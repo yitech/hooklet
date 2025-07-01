@@ -4,6 +4,7 @@ from hooklet.pilot import NatsPilot
 from hooklet.base.types import Msg
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_nats_pilot_connection():
     """Test basic connection functionality"""
     pilot = NatsPilot(nats_url="nats://localhost:4222")
@@ -23,6 +24,7 @@ async def test_nats_pilot_connection():
         pytest.skip("NATS server not available")
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_nats_pilot_pubsub():
     """Test pub/sub functionality"""
     pilot = NatsPilot(nats_url="nats://localhost:4222")
@@ -57,6 +59,7 @@ async def test_nats_pilot_pubsub():
         pytest.skip("NATS server not available")
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_nats_pilot_reqreply():
     """Test request-reply functionality"""
     pilot = NatsPilot(nats_url="nats://localhost:4222")
@@ -89,6 +92,7 @@ async def test_nats_pilot_reqreply():
         pytest.skip("NATS server not available")
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_nats_pilot_context_manager():
     """Test context manager functionality"""
     pilot = NatsPilot(nats_url="nats://localhost:4222")

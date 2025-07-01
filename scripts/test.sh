@@ -12,18 +12,16 @@ case "$MODE" in
         python -m pytest -v
         ;;
     unittest)
-        python -m pytest -v tests/ --ignore=tests/integration
+        python -m pytest -v -m "not integration"
         ;;
     integration)
-        if [ -d "tests/integration" ]; then
-            python -m pytest -v tests/integration
-        else
-            echo "[WARN] No integration tests directory found. Skipping."
-            exit 0
-        fi
+        python -m pytest -v -m "integration"
         ;;
     *)
         echo "Usage: $0 [all|unittest|integration]"
+        echo "  all: Run all tests"
+        echo "  unittest: Run only unit tests (exclude integration tests)"
+        echo "  integration: Run only integration tests"
         exit 1
         ;;
 esac 
