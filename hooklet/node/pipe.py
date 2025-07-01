@@ -39,3 +39,7 @@ class Pipe(Node, ABC):
             except Exception as e:
                 await self.on_error(e)
     
+    async def close(self):
+        await super().close()
+        for subscribe in self.subscribes:
+            self.pubsub.unsubscribe(subscribe, hash(self.queue.put))
