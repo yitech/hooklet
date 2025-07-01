@@ -47,6 +47,7 @@ class ReqReply(ABC):
         raise NotImplementedError("Subclasses must implement register_callback()")
     
 class PushPull(ABC):
+
     @abstractmethod
     async def push(self, subject: str, job: Job) -> bool:
         """
@@ -69,11 +70,18 @@ class PushPull(ABC):
         raise NotImplementedError("Subclasses must implement unregister_worker()")
     
     @abstractmethod
-    async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> None:
+    async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
         """
         Subscribe to a specific subject.
         """
         raise NotImplementedError("Subclasses must implement subscribe()")
+    
+    @abstractmethod
+    async def unsubscribe(self, subject: str, subscription_id: int) -> bool:
+        """
+        Unsubscribe from a specific subject.
+        """
+        raise NotImplementedError("Subclasses must implement unsubscribe()")
 
 
 class Pilot(ABC):
