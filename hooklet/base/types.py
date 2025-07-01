@@ -20,6 +20,16 @@ class Reply(TypedDict):
     start_ms: int
     end_ms: int
 
+class Job(TypedDict):
+    _id: str
+    type: str
+    data: Any
+    error: str | None
+    start_ms: int
+    end_ms: int
+    status: str
+    retry_count: int
+
 
 
 
