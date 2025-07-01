@@ -75,15 +75,9 @@ class TestInprocPubSub:
     """Test cases for InprocPubSub class."""
 
     @pytest.fixture
-    def pilot(self):
-        """Create a mock pilot for testing."""
-        mock_pilot = AsyncMock()
-        return mock_pilot
-
-    @pytest.fixture
-    def pubsub(self, pilot):
+    def pubsub(self):
         """Create an InprocPubSub instance."""
-        return InprocPubSub(pilot)
+        return InprocPubSub()
 
     @pytest.fixture
     def sample_msg(self):
@@ -96,18 +90,18 @@ class TestInprocPubSub:
         return AsyncMock()
 
     @pytest.mark.asyncio
-    async def test_init(self, pilot):
+    async def test_init(self):
         """Test InprocPubSub initialization."""
-        pubsub = InprocPubSub(pilot)
-        assert pubsub._pilot == pilot
+        pubsub = InprocPubSub()
         assert pubsub._subscriptions == {}
 
     @pytest.mark.asyncio
-    async def test_publish(self, pubsub, sample_msg):
+    async def test_publish(self, pubsub, sample_msg, mock_callback):
         """Test publishing a message."""
         subject = "test.subject"
+        pubsub.subscribe(subject, mock_callback)
         await pubsub.publish(subject, sample_msg)
-        pubsub._pilot._handle_publish.assert_called_once_with(subject, sample_msg)
+        mock_callback.assert_awaited_once_with(sample_msg)
 
     def test_subscribe(self, pubsub, mock_callback):
         """Test subscribing to a subject."""
@@ -331,32 +325,4 @@ class TestInprocPilotIntegration:
         assert len(received_messages2) == 1
         assert received_messages1[0] == sample_msg
         assert received_messages2[0] == sample_msg
-
-    @pytest.mark.asyncio
-    async def test_handle_publish_error(self, pilot, sample_msg):
-        """Test error handling in _handle_publish."""
-        pubsub = pilot.pubsub()
-        
-        async def error_handler(msg):
-            raise ValueError("Test error")
-        
-        subject = "test.subject"
-        pubsub.subscribe(subject, error_handler)
-        
-        with pytest.raises(ValueError, match="Test error"):
-            await pilot._handle_publish(subject, sample_msg)
-
-    @pytest.mark.asyncio
-    async def test_handle_request_error(self, pilot, sample_msg):
-        """Test error handling in _handle_request."""
-        reqreply = pilot.reqreply()
-        
-        async def error_handler(msg):
-            raise RuntimeError("Test request error")
-        
-        subject = "test.subject"
-        await reqreply.register_callback(subject, error_handler)
-        
-        with pytest.raises(RuntimeError, match="Test request error"):
-            await pilot._handle_request(subject, sample_msg)
 

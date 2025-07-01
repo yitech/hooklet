@@ -8,12 +8,13 @@ from hooklet.logger import get_logger
 logger = get_logger(__name__)
 
 class InprocPubSub(PubSub):
-    def __init__(self, pilot: 'InprocPilot') -> None:
-        self._pilot = pilot
+    def __init__(self) -> None:
         self._subscriptions: Dict[str, list[Callable[[Msg], Awaitable[Any]]]] = defaultdict(list)
 
     async def publish(self, subject: str, data: Msg) -> None:
-        await self._pilot._handle_publish(subject, data)
+        subscriptions = self._subscriptions[subject]
+        tasks = [callback(data) for callback in subscriptions]
+        await asyncio.gather(*tasks)
 
     def subscribe(self, subject: str, callback: Callable[[Msg], Awaitable[Any]]) -> int:
         self._subscriptions[subject].append(callback)
@@ -59,7 +60,7 @@ class InprocPilot(Pilot):
     def __init__(self) -> None:
         super().__init__()
         self._connected = False
-        self._pubsub = InprocPubSub(self)
+        self._pubsub = InprocPubSub()
         self._reqreply = InprocReqReply()
 
     def is_connected(self) -> bool:
@@ -78,20 +79,6 @@ class InprocPilot(Pilot):
 
     def reqreply(self) -> ReqReply:
         return self._reqreply
-    
-    async def _handle_publish(self, subject: str, data: Msg) -> None:
-        try:
-            subscriptions = self._pubsub.get_subscriptions(subject)
-            tasks = [callback(data) for callback in subscriptions]
-            await asyncio.gather(*tasks)
-        except Exception as e:
-            logger.error(f"Error publishing to {subject}: {e}", exc_info=True)
-            raise
 
-    async def _handle_request(self, subject: str, data: Msg) -> Msg:
-        try:
-            return await self._reqreply.request(subject, data)
-        except Exception as e:
-            logger.error(f"Error requesting from {subject}: {e}", exc_info=True)
-            raise
+
 
