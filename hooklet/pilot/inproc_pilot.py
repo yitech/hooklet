@@ -52,7 +52,7 @@ class InprocReqReply(ReqReply):
         self._callbacks[subject] = callback
         return subject
     
-    def unregister_callback(self, subject: str) -> None:
+    async def unregister_callback(self, subject: str) -> None:
         if subject in self._callbacks:
             del self._callbacks[subject]
 

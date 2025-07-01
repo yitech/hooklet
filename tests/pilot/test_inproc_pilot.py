@@ -226,15 +226,16 @@ class TestInprocReqReply:
         
         assert subject in reqreply._callbacks
         
-        reqreply.unregister_callback(subject)
+        await reqreply.unregister_callback(subject)
         
         assert subject not in reqreply._callbacks
 
-    def test_unregister_nonexistent_callback(self, reqreply):
+    @pytest.mark.asyncio
+    async def test_unregister_nonexistent_callback(self, reqreply):
         """Test unregistering a non-existent callback."""
         subject = "nonexistent.subject"
         # Should not raise an exception
-        reqreply.unregister_callback(subject)
+        await reqreply.unregister_callback(subject)
 
 
 class TestInprocPilotIntegration:
@@ -294,7 +295,7 @@ class TestInprocPilotIntegration:
         assert result == response_data
         
         # Test unregistration
-        reqreply.unregister_callback(subject)
+        await reqreply.unregister_callback(subject)
         
         with pytest.raises(ValueError, match=f"No callback registered for {subject}"):
             await reqreply.request(subject, sample_msg)
