@@ -3,6 +3,7 @@ from abc import abstractmethod, ABC
 from typing import Callable, AsyncGenerator
 from hooklet.base.pilot import Msg
 import asyncio
+from contextlib import aclosing
 from hooklet.base.node import Node
 
 class Pipe(Node, ABC):
@@ -27,9 +28,12 @@ class Pipe(Node, ABC):
         while self.is_running:
             try:
                 msg = await asyncio.wait_for(self.queue.get(), timeout=2)
-                async for msg in self.pipe(msg):
-                    subject = self.router(msg)
-                    await self.pubsub.publish(subject, msg)
+                async with aclosing(self.pipe(msg)) as gen:
+                    async for msg in gen:
+                        if not self.is_running:
+                            break
+                        subject = self.router(msg)
+                        await self.pubsub.publish(subject, msg)
             except asyncio.TimeoutError:
                 pass
     

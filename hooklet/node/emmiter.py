@@ -26,7 +26,7 @@ class Emitter(Node, ABC):
         try:
             async with aclosing(self.emit()) as gen:
                 async for msg in gen:
-                    if self.shutdown_event.is_set():
+                    if not self.is_running:
                         break
                     subject = self.router(msg)
                     await self.pubsub.publish(subject, msg)
