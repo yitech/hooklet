@@ -15,6 +15,9 @@ class RPCServer(Node, ABC):
 
     @abstractmethod
     async def callback(self, req: Req) -> Reply:
+        """
+        The ReqReply require developer to implement the callback, including the error handling and return the Reply with error.
+        """
         raise NotImplementedError("Subclasses must implement callback()")   
 
     async def run(self):
@@ -27,7 +30,10 @@ class RPCClient(Node):
         self.reqreply = reqreply
 
     async def request(self, subject: str, req: Req) -> Reply:
-        return await self.reqreply.request(subject, req)
+        try:
+            return await self.reqreply.request(subject, req)
+        except Exception as e:
+            await self.on_error(e)
     
     async def run(self):
         await self.shutdown_event.wait()
