@@ -2,8 +2,6 @@ import asyncio
 import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-import time
-
 from hooklet.pilot.inproc_pilot import InprocPilot, InprocPubSub, InprocReqReply, SimplePushPull, InprocPushPull
 from hooklet.base.types import Msg, Job
 
