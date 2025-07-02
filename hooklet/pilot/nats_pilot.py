@@ -1,16 +1,17 @@
-import asyncio
-import uuid
-from typing import Any, Dict, Optional, Callable, Awaitable
+from typing import Any, Awaitable, Callable, Dict
+
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg as NatsMsg
 from nats.aio.subscription import Subscription
-from hooklet.base import Pilot, PubSub, ReqReply, Msg, Job, PushPull
+
+from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, ReqReply
 from hooklet.logger import get_logger
 
 logger = get_logger(__name__)
 
+
 class NatsPubSub(PubSub):
-    def __init__(self, pilot: 'NatsPilot') -> None:
+    def __init__(self, pilot: "NatsPilot") -> None:
         self._pilot = pilot
         self._subscriptions: Dict[str, list[Callable[[Msg], Awaitable[Any]]]] = {}
         self._nats_subscriptions: Dict[str, list[Subscription]] = {}
@@ -19,6 +20,7 @@ class NatsPubSub(PubSub):
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
         import json
+
         payload = json.dumps(data).encode()
         await self._pilot._nats_client.publish(subject, payload)
         logger.debug(f"Published to {subject}: {data}")
@@ -31,10 +33,13 @@ class NatsPubSub(PubSub):
         async def nats_callback(msg: NatsMsg):
             try:
                 import json
+
                 data = json.loads(msg.data.decode())
                 await callback(data)
             except Exception as e:
-                logger.error(f"Error in NATS subscription callback for {subject}: {e}", exc_info=True)
+                logger.error(
+                    f"Error in NATS subscription callback for {subject}: {e}", exc_info=True
+                )
 
         sub = await self._pilot._nats_client.subscribe(subject, cb=nats_callback)
         if subject not in self._subscriptions:
@@ -50,7 +55,8 @@ class NatsPubSub(PubSub):
             return False
         try:
             callback_to_remove = next(
-                callback for callback in self._subscriptions[subject]
+                callback
+                for callback in self._subscriptions[subject]
                 if hash(callback) == subscription_id
             )
             index = self._subscriptions[subject].index(callback_to_remove)
@@ -74,8 +80,9 @@ class NatsPubSub(PubSub):
         self._subscriptions.clear()
         self._nats_subscriptions.clear()
 
+
 class NatsReqReply(ReqReply):
-    def __init__(self, pilot: 'NatsPilot') -> None:
+    def __init__(self, pilot: "NatsPilot") -> None:
         self._pilot = pilot
         self._callbacks: Dict[str, Callable[[Any], Awaitable[Any]]] = {}
         self._nats_subscriptions: Dict[str, Subscription] = {}
@@ -84,6 +91,7 @@ class NatsReqReply(ReqReply):
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
         import json
+
         payload = json.dumps(data).encode()
         try:
             response = await self._pilot._nats_client.request(subject, payload, timeout=30.0)
@@ -92,12 +100,16 @@ class NatsReqReply(ReqReply):
             logger.error(f"Error making request to {subject}: {e}", exc_info=True)
             raise
 
-    async def register_callback(self, subject: str, callback: Callable[[Any], Awaitable[Any]]) -> str:
+    async def register_callback(
+        self, subject: str, callback: Callable[[Any], Awaitable[Any]]
+    ) -> str:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
+
         async def nats_callback(msg: NatsMsg):
             try:
                 import json
+
                 data = json.loads(msg.data.decode())
                 response = await callback(data)
                 response_payload = json.dumps(response).encode()
@@ -106,6 +118,7 @@ class NatsReqReply(ReqReply):
                 logger.error(f"Error in NATS request callback for {subject}: {e}", exc_info=True)
                 error_response = {"error": str(e)}
                 await msg.respond(json.dumps(error_response).encode())
+
         sub = await self._pilot._nats_client.subscribe(subject, cb=nats_callback)
         self._callbacks[subject] = callback
         self._nats_subscriptions[subject] = sub
@@ -125,22 +138,24 @@ class NatsReqReply(ReqReply):
         for subject in list(self._callbacks.keys()):
             await self.unregister_callback(subject)
 
+
 class NatsPushPull(PushPull):
-    def __init__(self, pilot: 'NatsPilot') -> None:
+    def __init__(self, pilot: "NatsPilot") -> None:
         self._pilot = pilot
         self._workers: Dict[str, list[Callable[[Job], Awaitable[Any]]]] = {}
-    
+
     async def push(self, subject: str, job: Job) -> bool:
         raise NotImplementedError("NatsPushPull.push is not implemented")
-    
+
     async def register_worker(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
         raise NotImplementedError("NatsPushPull.register_worker is not implemented")
-    
+
     async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
         raise NotImplementedError("NatsPushPull.subscribe is not implemented")
-    
+
     async def unsubscribe(self, subject: str, subscription_id: int) -> bool:
         raise NotImplementedError("NatsPushPull.unsubscribe is not implemented")
+
 
 class NatsPilot(Pilot):
     def __init__(self, nats_url: str = "nats://localhost:4222", **kwargs) -> None:
@@ -180,6 +195,6 @@ class NatsPilot(Pilot):
 
     def reqreply(self) -> NatsReqReply:
         return self._reqreply
-    
+
     def pushpull(self) -> NatsPushPull:
         return self._pushpull

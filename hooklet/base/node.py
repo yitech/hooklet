@@ -1,22 +1,23 @@
-from enum import Enum
-from hooklet.logger import get_node_logger
-from typing import Coroutine
 import asyncio
 from abc import ABC, abstractmethod
-from .pilot import Pilot, Msg
-from .types import Req, Reply
+from enum import Enum
+from typing import Coroutine
+
+from hooklet.logger import get_node_logger
+
 
 class EventType(Enum):
     """
     Event types for nodes.
     """
+
     START = "start"
     CLOSE = "close"
     FINISH = "finish"
     ERROR = "error"
 
 
-class Node:
+class Node(ABC):
     def __init__(self, name: str):
         self._name = name
         self.task: asyncio.Task | None = None
@@ -28,12 +29,10 @@ class Node:
         }
         self.shutdown_event = asyncio.Event()
         self.logger = get_node_logger(self._name)
-        
-    
+
     @property
     def name(self) -> str:
         return self._name
-    
 
     @property
     def is_running(self) -> bool:
@@ -44,14 +43,13 @@ class Node:
             await coroutine
         self.event_handlers[EventType.START].clear()
         self.task = asyncio.create_task(self.run())
-    
+
     @abstractmethod
     async def run(self):
         """
         This method is called when the node is started. Expect as a blocking call.
         """
-        while not self.shutdown_event.is_set():
-            await asyncio.sleep(1)
+        raise NotImplementedError("Subclasses must implement this method")
 
     async def close(self):
         self.shutdown_event.set()
@@ -78,4 +76,3 @@ class Node:
 
     async def on_error(self, error: Exception):
         self.logger.error(f"Error in {self.name}: {error}", exc_info=True)
-        

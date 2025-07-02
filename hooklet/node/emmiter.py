@@ -1,9 +1,10 @@
-from hooklet.base.node import Node
-from abc import abstractmethod, ABC
-from typing import Callable, AsyncGenerator
-from hooklet.base.pilot import Msg, PubSub
+from abc import ABC, abstractmethod
 from contextlib import aclosing
-import asyncio
+from typing import AsyncGenerator, Callable
+
+from hooklet.base.node import Node
+from hooklet.base.pilot import Msg, PubSub
+
 
 class Emitter(Node, ABC):
     def __init__(self, name: str, pubsub: PubSub, router: Callable[[Msg], str]):
@@ -13,7 +14,6 @@ class Emitter(Node, ABC):
         super().__init__(name)
         self.pubsub = pubsub
         self.router = router
-    
 
     @abstractmethod
     async def emit(self) -> AsyncGenerator[Msg, None]:
@@ -32,4 +32,3 @@ class Emitter(Node, ABC):
                     await self.pubsub.publish(subject, msg)
         except Exception as e:
             await self.on_error(e)
-        

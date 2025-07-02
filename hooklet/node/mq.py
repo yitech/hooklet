@@ -1,14 +1,10 @@
+from abc import ABC
+
 from hooklet.base.node import Node
-from abc import abstractmethod, ABC
-from typing import Callable, AsyncGenerator
-from hooklet.base.pilot import Job, PushPull
-from contextlib import aclosing
-import asyncio
+from hooklet.base.pilot import PushPull
+
 
 class Worker(Node, ABC):
     def __init__(self, name: str, pushpull: PushPull):
         super().__init__(name)
         self.pushpull = pushpull
-
-
-    

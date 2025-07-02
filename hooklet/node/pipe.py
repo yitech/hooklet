@@ -1,19 +1,22 @@
-from hooklet.base import PubSub
-from abc import abstractmethod, ABC
-from typing import Callable, AsyncGenerator
-from hooklet.base.pilot import Msg
 import asyncio
+from abc import ABC, abstractmethod
 from contextlib import aclosing
+from typing import AsyncGenerator, Callable
+
+from hooklet.base import PubSub
 from hooklet.base.node import Node
+from hooklet.base.pilot import Msg
+
 
 class Pipe(Node, ABC):
-    def __init__(self, name: str, subscribes: list[str], pubsub: PubSub, router: Callable[[Msg], str]):
+    def __init__(
+        self, name: str, subscribes: list[str], pubsub: PubSub, router: Callable[[Msg], str]
+    ):
         super().__init__(name)
         self.subscribes = subscribes
         self.pubsub = pubsub
         self.router = router
         self.queue: asyncio.Queue[Msg] = asyncio.Queue()
-        
 
     async def start(self):
         await super().start()
@@ -38,7 +41,7 @@ class Pipe(Node, ABC):
                 pass
             except Exception as e:
                 await self.on_error(e)
-    
+
     async def close(self):
         await super().close()
         for subscribe in self.subscribes:
