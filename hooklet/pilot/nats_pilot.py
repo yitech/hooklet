@@ -136,9 +136,6 @@ class NatsPushPull(PushPull):
     async def register_worker(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
         raise NotImplementedError("NatsPushPull.register_worker is not implemented")
     
-    async def unregister_worker(self, subject: str, worker_id: int) -> bool:
-        raise NotImplementedError("NatsPushPull.unregister_worker is not implemented")
-    
     async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
         raise NotImplementedError("NatsPushPull.subscribe is not implemented")
     
