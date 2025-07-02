@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Awaitable
+from typing import Any, Awaitable, Callable
 
-from hooklet.base.types import Msg, Req, Reply
+from hooklet.base.types import Job, Msg, Reply, Req
+
 
 class PubSub(ABC):
     """
@@ -14,16 +15,16 @@ class PubSub(ABC):
         Publish data to a specific subject.
         """
         raise NotImplementedError("Subclasses must implement publish()")
-    
+
     @abstractmethod
-    def subscribe(self, subject: str, callback: Callable[[Msg], Awaitable[Any]]) -> int:
+    async def subscribe(self, subject: str, callback: Callable[[Msg], Awaitable[Any]]) -> int:
         """
         Subscribe to a specific subject.
         """
         raise NotImplementedError("Subclasses must implement subscribe()")
-    
+
     @abstractmethod
-    def unsubscribe(self, subject: str, subscription_id: int) -> bool:
+    async def unsubscribe(self, subject: str, subscription_id: int) -> bool:
         """
         Unsubscribe from a specific subject.
         """
@@ -40,11 +41,53 @@ class ReqReply(ABC):
         raise NotImplementedError("Subclasses must implement request()")
 
     @abstractmethod
-    async def register_callback(self, subject: str, callback: Callable[[Req], Awaitable[Reply]]) -> str:
+    async def register_callback(
+        self, subject: str, callback: Callable[[Req], Awaitable[Reply]]
+    ) -> None:
         """
         Register a callback for a specific subject.
         """
         raise NotImplementedError("Subclasses must implement register_callback()")
+
+    @abstractmethod
+    async def unregister_callback(self, subject: str, callback_id: int) -> bool:
+        """
+        Unregister a callback for a specific subject.
+        """
+        raise NotImplementedError("Subclasses must implement unregister_callback()")
+
+
+class PushPull(ABC):
+
+    @abstractmethod
+    async def push(self, subject: str, job: Job) -> bool:
+        """
+        Push data to a specific subject.
+        """
+        raise NotImplementedError("Subclasses must implement push()")
+
+    @abstractmethod
+    async def register_worker(
+        self, subject: str, callback: Callable[[Job], Awaitable[Any]], n_workers: int = 1
+    ) -> None:
+        """
+        Register a worker for a specific subject.
+        """
+        raise NotImplementedError("Subclasses must implement register_worker()")
+
+    @abstractmethod
+    async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
+        """
+        Subscribe to a specific subject.
+        """
+        raise NotImplementedError("Subclasses must implement subscribe()")
+
+    @abstractmethod
+    async def unsubscribe(self, subject: str, subscription_id: int) -> bool:
+        """
+        Unsubscribe from a specific subject.
+        """
+        raise NotImplementedError("Subclasses must implement unsubscribe()")
 
 
 class Pilot(ABC):
@@ -55,7 +98,7 @@ class Pilot(ABC):
     async def __aenter__(self) -> "Pilot":
         await self.connect()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_value, traceback) -> None:
         await self.disconnect()
 
@@ -65,28 +108,28 @@ class Pilot(ABC):
         Check if the message broker is connected.
         """
         raise NotImplementedError("Subclasses must implement is_connected()")
-    
+
     @abstractmethod
     async def connect(self) -> None:
         """
         Connect to the message broker.
         """
         raise NotImplementedError("Subclasses must implement connect()")
-    
+
     @abstractmethod
     async def disconnect(self) -> None:
         """
         Disconnect from the message broker.
         """
         raise NotImplementedError("Subclasses must implement disconnect()")
-    
+
     @abstractmethod
     def pubsub(self) -> PubSub:
         """
         Get the pub/sub interface.
         """
         raise NotImplementedError("Subclasses must implement pubsub()")
-    
+
     @abstractmethod
     def reqreply(self) -> ReqReply:
         """

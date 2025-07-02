@@ -1,9 +1,9 @@
-from hooklet.base.node import Node
-from abc import abstractmethod, ABC
-from typing import Callable, AsyncGenerator
-from hooklet.base.pilot import Msg, PubSub
-from contextlib import aclosing
 import asyncio
+from abc import ABC, abstractmethod
+
+from hooklet.base.node import Node
+from hooklet.base.pilot import Msg, PubSub
+
 
 class Sinker(Node, ABC):
     def __init__(self, name: str, subscribes: list[str], pubsub: PubSub):
@@ -19,11 +19,11 @@ class Sinker(Node, ABC):
         await super().start()
         for subscribe in self.subscribes:
             self.pubsub.subscribe(subscribe, self.queue.put)
-    
+
     @abstractmethod
     async def sink(self, msg: Msg) -> None:
         raise NotImplementedError("Subclasses must implement sink()")
-    
+
     async def run(self):
         while self.is_running:
             try:
@@ -36,4 +36,3 @@ class Sinker(Node, ABC):
         await super().close()
         for subscribe in self.subscribes:
             self.pubsub.unsubscribe(subscribe, hash(self.queue.put))
-    

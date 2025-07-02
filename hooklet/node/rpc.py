@@ -1,8 +1,9 @@
-from abc import abstractmethod, ABC
+from abc import ABC, abstractmethod
+
 from hooklet.base.node import Node
 from hooklet.base.pilot import ReqReply
-from hooklet.base.types import Req, Reply
-import asyncio
+from hooklet.base.types import Reply, Req
+
 
 class RPCServer(Node, ABC):
     def __init__(self, name: str, reqreply: ReqReply):
@@ -16,9 +17,10 @@ class RPCServer(Node, ABC):
     @abstractmethod
     async def callback(self, req: Req) -> Reply:
         """
-        The ReqReply require developer to implement the callback, including the error handling and return the Reply with error.
+        The ReqReply require developer to implement the callback, including the error
+        handling and return the Reply with error.
         """
-        raise NotImplementedError("Subclasses must implement callback()")   
+        raise NotImplementedError("Subclasses must implement callback()")
 
     async def run(self):
         await self.shutdown_event.wait()
@@ -35,8 +37,6 @@ class RPCClient(Node):
         except Exception as e:
             await self.on_error(e)
             raise  # Re-raise the exception
-    
+
     async def run(self):
         await self.shutdown_event.wait()
-
-    
