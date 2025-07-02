@@ -139,15 +139,28 @@ class SimplePushPull(PushPull):
     
     async def _worker_loop(self, callback: Callable[[Job], Awaitable[Any]]) -> None:
         while not self._shutdown_event.is_set():
-            try:
-                job = await asyncio.wait_for(self._job_queue.get(), timeout=1)
-                job.update(
+            done, pending = await asyncio.wait(
+                [
+                    asyncio.create_task(self._job_queue.get()),
+                    asyncio.create_task(self._shutdown_event.wait()),
+                ],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+            if self._shutdown_event.is_set():
+                break
+            # Get the first (and only) completed task from the done set
+            completed_task = next(iter(done))
+            job = completed_task.result()
+            job.update(
                     {
                         "start_ms": int(time.time() * 1000),
                         "status": "running",
                     }
-                )
-                await self._notify_subscriptions(job)
+            )
+            await self._notify_subscriptions(job)
+            try:
                 await callback(job)
                 job.update(
                     {
@@ -156,18 +169,13 @@ class SimplePushPull(PushPull):
                     }
                 )
                 await self._notify_subscriptions(job)
-            except asyncio.TimeoutError:
-                continue
             except asyncio.CancelledError:
                 job.update(
                     {
                         "end_ms": int(time.time() * 1000),
-                        "status": "failed",
-                        "error": "Cancelled",
+                        "status": "cancelled",
                     }
                 )
-                await self._notify_subscriptions(job)
-                break
             except Exception as e:
                 logger.error(f"Error in worker loop for {self.subject}: {e}")
                 job.update(
@@ -178,7 +186,7 @@ class SimplePushPull(PushPull):
                     }
                 )
                 await self._notify_subscriptions(job)
-                continue
+                
                 
         logger.info(f"Worker loop for {self.subject} shutdown")
 
@@ -198,8 +206,6 @@ class SimplePushPull(PushPull):
 
     async def _cleanup(self) -> None:
         self._shutdown_event.set()
-        for task in self._worker_loops:
-            task.cancel()
         await asyncio.gather(*[asyncio.wait_for(task, timeout=2.0) for task in self._worker_loops], return_exceptions=True)
         self._worker_loops.clear()
         self._subscriptions.clear()

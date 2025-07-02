@@ -461,6 +461,7 @@ class TestInprocPushPull:
         """Test InprocPushPull initialization."""
         assert inproc_pushpull._pushpulls == {}
         assert inproc_pushpull._pilot is not None
+        await inproc_pushpull._cleanup()
 
     @pytest.mark.asyncio
     async def test_push_creates_simplepushpull(self, inproc_pushpull):
@@ -473,6 +474,7 @@ class TestInprocPushPull:
         assert result is True
         assert subject in inproc_pushpull._pushpulls
         assert isinstance(inproc_pushpull._pushpulls[subject], SimplePushPull)
+        await inproc_pushpull._cleanup()
 
     @pytest.mark.asyncio
     async def test_push_multiple_subjects(self, inproc_pushpull):
@@ -498,6 +500,7 @@ class TestInprocPushPull:
         assert subject in inproc_pushpull._pushpulls
         simple_pushpull = inproc_pushpull._pushpulls[subject]
         assert len(simple_pushpull._worker_loops) == 2
+        await inproc_pushpull._cleanup()
 
     @pytest.mark.asyncio
     async def test_subscribe_creates_simplepushpull(self, inproc_pushpull):
@@ -591,6 +594,7 @@ class TestInprocPushPull:
         assert simple_pushpull1 is simple_pushpull2
         assert simple_pushpull2 is simple_pushpull3
         assert len(inproc_pushpull._pushpulls) == 1
+        await inproc_pushpull._cleanup()
 
     @pytest.mark.asyncio
     async def test_push_through_inproc_to_simple(self, inproc_pushpull):
