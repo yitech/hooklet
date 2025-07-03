@@ -11,7 +11,7 @@ import random
 import time
 from typing import Any, Dict
 
-from hooklet.node.emmiter import Emitter
+from hooklet.node.emitter import Emitter
 from hooklet.pilot.inproc_pilot import InprocPilot
 from hooklet.pilot.nats_pilot import NatsPilot
 from hooklet.base.types import Msg

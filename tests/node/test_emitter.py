@@ -4,9 +4,9 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 from typing import AsyncGenerator
 
-from hooklet.node.emmiter import Emitter
+from hooklet.node.emitter import Emitter
+from hooklet.base.pilot import Msg
 from hooklet.pilot.inproc_pilot import InprocPilot
-from hooklet.base.types import Msg
 from hooklet.utils.id_generator import generate_id
 
 
