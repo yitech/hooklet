@@ -34,6 +34,5 @@ class RPCClient:
         try:
             return await self.reqreply.request(subject, req)
         except Exception as e:
-            await self.on_error(e)
             raise  # Re-raise the exception
 

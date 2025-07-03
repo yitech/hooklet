@@ -165,6 +165,7 @@ class NatsPilot(Pilot):
         self._connected = False
         self._pubsub = NatsPubSub(self)
         self._reqreply = NatsReqReply(self)
+        self._pushpull = NatsPushPull(self)
         self._kwargs = kwargs
 
     def is_connected(self) -> bool:

@@ -84,10 +84,10 @@ class InprocPushPull(PushPull):
             self._pushpulls[subject] = SimplePushPull(subject, self._pilot)
         await self._pushpulls[subject].register_worker(callback, n_workers)
 
-    async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> None:
+    async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
         if subject not in self._pushpulls:
             self._pushpulls[subject] = SimplePushPull(subject, self._pilot)
-        await self._pushpulls[subject].subscribe(callback)
+        return await self._pushpulls[subject].subscribe(callback)
 
     async def unsubscribe(self, subject: str, subscription_id: int) -> bool:
         if subject not in self._pushpulls:
@@ -129,10 +129,11 @@ class SimplePushPull(PushPull):
         for _ in range(n_workers):
             self._worker_loops.append(asyncio.create_task(self._worker_loop(callback)))
 
-    async def subscribe(self, callback: Callable[[Job], Awaitable[Any]]) -> None:
+    async def subscribe(self, callback: Callable[[Job], Awaitable[Any]]) -> int:
         logger.info(f"Subscribed {id(callback)} to {self.subject}")
         async with self._subscription_lock:
             self._subscriptions.append(callback)
+        return id(callback)
 
     async def unsubscribe(self, subscription_id: int) -> bool:
         async with self._subscription_lock:
