@@ -26,9 +26,8 @@ class RPCServer(Node, ABC):
         await self.shutdown_event.wait()
 
 
-class RPCClient(Node):
-    def __init__(self, name: str, reqreply: ReqReply):
-        super().__init__(name)
+class RPCClient:
+    def __init__(self, reqreply: ReqReply):
         self.reqreply = reqreply
 
     async def request(self, subject: str, req: Req) -> Reply:
@@ -38,5 +37,3 @@ class RPCClient(Node):
             await self.on_error(e)
             raise  # Re-raise the exception
 
-    async def run(self):
-        await self.shutdown_event.wait()
