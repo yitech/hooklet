@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Awaitable, Callable
 
 from hooklet.base.node import Node
-from hooklet.base.pilot import PushPull, PubSub, Msg
+from hooklet.base.pilot import PushPull
 from hooklet.base.types import Job
 
 
@@ -28,7 +28,6 @@ class Worker(Node, ABC):
 
     async def on_finish(self):
         await super().on_finish()
-
 
 
 class Dispatcher:
