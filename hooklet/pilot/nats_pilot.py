@@ -21,14 +21,12 @@ class NatsPubSub(PubSub):
         self._subscriptions: Dict[str, list[Callable[[Msg], Awaitable[Any]]]] = {}
         self._nats_subscriptions: Dict[str, list[Subscription]] = {}
 
-    async def publish(self, subject: str, data: Msg) -> None:
+    async def publish(self, subject: str, msg: Msg) -> None:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
-        import json
-
-        payload = json.dumps(data).encode()
+        payload = json.dumps(msg).encode()
         await self._pilot._nats_client.publish(subject, payload)
-        logger.debug(f"Published to {subject}: {data}")
+        logger.debug(f"Published to {subject}: {msg}")
 
     async def subscribe(self, subject: str, callback: Callable[[Msg], Awaitable[Any]]) -> int:
         if not self._pilot.is_connected():
@@ -37,7 +35,6 @@ class NatsPubSub(PubSub):
 
         async def nats_callback(msg: NatsMsg):
             try:
-                import json
 
                 data = json.loads(msg.data.decode())
                 await callback(data)
@@ -95,8 +92,6 @@ class NatsReqReply(ReqReply):
     async def request(self, subject: str, data: Msg) -> Any:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
-        import json
-
         payload = json.dumps(data).encode()
         try:
             response = await self._pilot._nats_client.request(subject, payload, timeout=30.0)
@@ -113,8 +108,6 @@ class NatsReqReply(ReqReply):
 
         async def nats_callback(msg: NatsMsg):
             try:
-                import json
-
                 data = json.loads(msg.data.decode())
                 response = await callback(data)
                 response_payload = json.dumps(response).encode()
@@ -335,8 +328,6 @@ class NatsPushPull(PushPull):
 
         async def nats_callback(msg: NatsMsg):
             try:
-                import json
-
                 data = json.loads(msg.data.decode())
                 await callback(data)
             except Exception as e:
@@ -390,8 +381,8 @@ class NatsPushPull(PushPull):
 
         # Clear all collections
         self._workers.clear()
-        for subject in self._nats_subscriptions:
-            for sub in self._nats_subscriptions[subject]:
+        for _, subs in self._nats_subscriptions.items():
+            for sub in subs:
                 await sub.unsubscribe()
         self._nats_subscriptions.clear()
 
