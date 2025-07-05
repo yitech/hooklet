@@ -3,7 +3,7 @@ import time
 from collections import defaultdict
 from typing import Any, Awaitable, Callable, Dict
 
-from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, ReqReply
+from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, Req, ReqReply, Reply
 from hooklet.logger import get_logger
 
 logger = get_logger(__name__)
@@ -22,13 +22,13 @@ class InprocPubSub(PubSub):
                 subscription_id = id(subscriptions[i])
                 logger.error(f"Subscription {subscription_id} failed for {subject}: {result}")
 
-    def subscribe(self, subject: str, callback: Callable[[Msg], Awaitable[Any]]) -> int:
+    async def subscribe(self, subject: str, callback: Callable[[Msg], Awaitable[Any]]) -> int:
         self._subscriptions[subject].append(callback)
         subscription_id = id(callback)
         logger.info(f"Subscribed to {subject} with ID {subscription_id}")
         return subscription_id
 
-    def unsubscribe(self, subject: str, subscription_id: int) -> bool:
+    async def unsubscribe(self, subject: str, subscription_id: int) -> bool:
         if subject in self._subscriptions:
             try:
                 callback_to_remove = next(
@@ -51,7 +51,7 @@ class InprocReqReply(ReqReply):
     def __init__(self) -> None:
         self._callbacks: Dict[str, Callable[[Any], Awaitable[Any]]] = {}
 
-    async def request(self, subject: str, data: Msg) -> Any:
+    async def request(self, subject: str, data: Req) -> Any:
         if subject not in self._callbacks:
             raise ValueError(f"No callback registered for {subject}")
         return await self._callbacks[subject](data)
@@ -70,7 +70,7 @@ class InprocReqReply(ReqReply):
 class InprocPushPull(PushPull):
     def __init__(self, pilot: "InprocPilot") -> None:
         self._pilot = pilot
-        self._pushpulls: Dict[str, SimplePushPull] = dict()
+        self._pushpulls: Dict[str, SimplePushPull] = {}
 
     async def push(self, subject: str, job: Job) -> bool:
         if subject not in self._pushpulls:
