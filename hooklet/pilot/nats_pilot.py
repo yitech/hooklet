@@ -9,7 +9,7 @@ from nats.aio.msg import Msg as NatsMsg
 from nats.aio.subscription import Subscription
 from nats.js import JetStreamContext
 
-from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, ReqReply
+from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, Req, ReqReply, Reply
 from hooklet.logger import get_logger
 
 logger = get_logger(__name__)
@@ -89,16 +89,17 @@ class NatsReqReply(ReqReply):
         self._callbacks: Dict[str, Callable[[Any], Awaitable[Any]]] = {}
         self._nats_subscriptions: Dict[str, Subscription] = {}
 
-    async def request(self, subject: str, data: Msg) -> Any:
+    async def request(self, subject: str, req: Req, timeout: float = 10.0) -> Reply:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
-        payload = json.dumps(data).encode()
+        payload = json.dumps(req).encode()
         try:
-            response = await self._pilot._nats_client.request(subject, payload, timeout=30.0)
+            response = await self._pilot._nats_client.request(subject, payload, timeout=timeout)
             return json.loads(response.data.decode())
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Request to {subject} timed out after {timeout} seconds")
         except Exception as e:
-            logger.error(f"Error making request to {subject}: {e}", exc_info=True)
-            raise
+            raise e
 
     async def register_callback(
         self, subject: str, callback: Callable[[Any], Awaitable[Any]]
