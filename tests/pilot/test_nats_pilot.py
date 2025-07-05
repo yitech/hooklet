@@ -344,7 +344,7 @@ class TestNatsPushPull:
         """Test successful job push."""
         mock_js = MagicMock()  # ✅ Use AsyncMock for async interface
 
-        mock_js.streams_info = MagicMock(side_effect=Exception("Stream not found"))  # if awaited
+        mock_js.streams_info = AsyncMock(side_effect=Exception("Stream not found"))  # if awaited
         mock_js.add_stream = AsyncMock(return_value=None)  # ✅ so `await` works
         mock_ack = MagicMock()
         mock_ack.seq = 123
