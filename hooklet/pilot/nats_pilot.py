@@ -301,20 +301,20 @@ class NatsPushPull(PushPull):
                                 }
                             )
                             await self._notify_subscriptions(subject, job)
+                        except asyncio.CancelledError:
+                            job.update(
+                                {
+                                    "end_ms": int(time.time() * 1000),
+                                    "status": "cancelled",
+                                }
+                            )
+                            await self._notify_subscriptions(subject, job)
                         except Exception as e:
                             logger.error(f"Error in worker loop for {subject}: {e}", exc_info=True)
                             job.update(
                                 {
                                     "end_ms": int(time.time() * 1000),
                                     "status": "failed",
-                                }
-                            )
-                            await self._notify_subscriptions(subject, job)
-                        except asyncio.CancelledError:
-                            job.update(
-                                {
-                                    "end_ms": int(time.time() * 1000),
-                                    "status": "cancelled",
                                 }
                             )
                             await self._notify_subscriptions(subject, job)
