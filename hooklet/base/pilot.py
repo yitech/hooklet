@@ -136,7 +136,7 @@ class Pilot(ABC):
         Get the req/reply interface.
         """
         raise NotImplementedError("Subclasses must implement reqreply()")
-    
+
     @abstractmethod
     def pushpull(self) -> PushPull:
         """

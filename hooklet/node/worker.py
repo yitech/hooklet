@@ -18,11 +18,11 @@ class Worker(Node, ABC):
         Return 0 if the job is processed successfully, Other values are reserved for future use.
         """
         raise NotImplementedError("Subclasses must implement process()")
-    
+
     async def start(self):
         await super().start()
         await self.pushpull.register_worker(self.name, self.process)
-    
+
     async def run(self):
         await self.shutdown_event.wait()
 
@@ -37,11 +37,11 @@ class Dispatcher:
 
     async def dispatch(self, subject: str, job: Job) -> bool:
         return await self.pushpull.push(subject, job)
-    
+
     async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> None:
         subscription_id = await self.pushpull.subscribe(subject, callback)
         self._subscriptions[subject] = subscription_id
-    
+
     async def unsubscribe(self, subject: str) -> bool:
         subscription_id = self._subscriptions.pop(subject, None)
         if subscription_id is None:

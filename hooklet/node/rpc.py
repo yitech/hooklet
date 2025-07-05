@@ -33,6 +33,5 @@ class RPCClient:
     async def request(self, subject: str, req: Req) -> Reply:
         try:
             return await self.reqreply.request(subject, req)
-        except Exception as e:
+        except Exception:
             raise  # Re-raise the exception
-

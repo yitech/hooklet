@@ -1,8 +1,8 @@
-from typing import Any, Awaitable, Callable, Dict
 import asyncio
-import time
 import json
+import time
 from functools import lru_cache
+from typing import Any, Awaitable, Callable, Dict
 
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg as NatsMsg
@@ -152,7 +152,7 @@ class NatsPushPull(PushPull):
         self._workers: list[asyncio.Task] = []
         self._nats_subscriptions: Dict[str, list[Subscription]] = {}
         self._shutdown_event = asyncio.Event()
-        
+
     @lru_cache(maxsize=1000)
     def stream_name(self, subject: str) -> str:
         return subject.upper().replace(".", "-")
@@ -160,11 +160,11 @@ class NatsPushPull(PushPull):
     @lru_cache(maxsize=10)
     def consumer_name(self, subject: str) -> str:
         return f"worker-{subject.replace('.', '-')}"
-    
+
     @lru_cache(maxsize=10)
     def subscriber_subject(self, subject: str) -> str:
         return f"{subject}.subscriber"
-    
+
     @lru_cache(maxsize=10)
     def job_subject(self, subject: str) -> str:
         return f"{subject}.job"
@@ -183,7 +183,7 @@ class NatsPushPull(PushPull):
         logger.info(f"📦 Creating JetStream stream: {self.stream_name(subject)}")
         await self._js.add_stream(
             name=self.stream_name(subject),
-            subjects=[f"{subject}.>"], # allow all hierarchy levels
+            subjects=[f"{subject}.>"],  # allow all hierarchy levels
             retention="workqueue",  # Work queue retention for push-pull pattern
             max_msgs_per_subject=1000,
             max_msgs=10000,
@@ -210,23 +210,27 @@ class NatsPushPull(PushPull):
     async def push(self, subject: str, job: Job) -> bool:
         """Push a job to the specified subject using JetStream."""
         try:
-            await self._ensure_stream(subject)            
+            await self._ensure_stream(subject)
             # Update job metadata
-            job.update({
-                "recv_ms": int(time.time() * 1000),
-                "status": "new",
-            })
-            
+            job.update(
+                {
+                    "recv_ms": int(time.time() * 1000),
+                    "status": "new",
+                }
+            )
+
             # Publish job to JetStream
             payload = json.dumps(job).encode()
             ack = await self._js.publish(self.job_subject(subject), payload)
-            
+
             # Notify subscriptions
             # await self._notify_subscriptions(subject, job)
-            
-            logger.info(f"Pushed job {job['_id']} to {self.job_subject(subject)}, sequence: {ack.seq}")
+
+            logger.info(
+                f"Pushed job {job['_id']} to {self.job_subject(subject)}, sequence: {ack.seq}"
+            )
             return True
-            
+
         except Exception as e:
             logger.error(f"Error pushing job to {subject}: {e}", exc_info=True)
             return False
@@ -240,13 +244,13 @@ class NatsPushPull(PushPull):
             await self._ensure_consumer(subject)
             await self._js.pull_subscribe(
                 stream=self.stream_name(subject),
-                subject=self.job_subject(subject), 
+                subject=self.job_subject(subject),
                 durable=self.consumer_name(subject),
             )
             for _ in range(n_workers):
                 self._workers.append(asyncio.create_task(self._worker_loop(subject, callback)))
             logger.info(f"Registered {n_workers} workers for {subject}")
-            
+
         except Exception as e:
             logger.error(f"Error registering workers for {subject}: {e}", exc_info=True)
             raise
@@ -254,15 +258,15 @@ class NatsPushPull(PushPull):
     async def _worker_loop(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> None:
         try:
             await self._ensure_stream(subject)
-            
+
             await self._ensure_consumer(subject)
 
             subscription = await self._js.pull_subscribe(
                 stream=self.stream_name(subject),
-                subject=self.job_subject(subject), 
+                subject=self.job_subject(subject),
                 durable=self.consumer_name(subject),
             )
-            
+
             while not self._shutdown_event.is_set():
                 fetch_task = asyncio.create_task(subscription.fetch(batch=1, timeout=10.0))
                 shutdown_task = asyncio.create_task(self._shutdown_event.wait())
@@ -324,12 +328,11 @@ class NatsPushPull(PushPull):
         except Exception as e:
             logger.error(f"Error in worker loop for {subject}: {e}", exc_info=True)
             raise
-        
-        
 
     async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
         """Subscribe to job notifications for the specified subject."""
         subscription_subject = self.subscriber_subject(subject)
+
         async def nats_callback(msg: NatsMsg):
             try:
                 import json
@@ -356,7 +359,8 @@ class NatsPushPull(PushPull):
             return False
         try:
             remove_subscription = next(
-                sub for sub in self._nats_subscriptions[subscription_subject]
+                sub
+                for sub in self._nats_subscriptions[subscription_subject]
                 if sub._id == subscription_id
             )
             await remove_subscription.unsubscribe()
@@ -371,19 +375,19 @@ class NatsPushPull(PushPull):
         subscription_subject = self.subscriber_subject(subject)
         if subscription_subject not in self._nats_subscriptions:
             return
-        
+
         await self._nats_client.publish(subscription_subject, json.dumps(job).encode())
 
     async def _cleanup(self) -> None:
         """Clean up all resources."""
         self._shutdown_event.set()
         await asyncio.wait_for(asyncio.gather(*self._workers, return_exceptions=True), timeout=10.0)
-               
+
         # Cancel all worker tasks if timeout is reached
         for task in self._workers:
             if not task.done():
                 task.cancel()
-        
+
         # Clear all collections
         self._workers.clear()
         for subject in self._nats_subscriptions:
@@ -391,8 +395,6 @@ class NatsPushPull(PushPull):
                 await sub.unsubscribe()
         self._nats_subscriptions.clear()
 
-        
-        
         logger.info("NatsPushPull cleanup completed")
 
 
