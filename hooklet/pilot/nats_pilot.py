@@ -238,12 +238,12 @@ class NatsPushPull(PushPull):
         try:
             await self._ensure_stream(subject)
             await self._ensure_consumer(subject)
+            await self._js.pull_subscribe(
+                stream=self.stream_name(subject),
+                subject=self.job_subject(subject), 
+                durable=self.consumer_name(subject),
+            )
             for _ in range(n_workers):
-                await self._js.pull_subscribe(
-                    stream=self.stream_name(subject),
-                    subject=self.job_subject(subject), 
-                    durable=self.consumer_name(subject),
-                )
                 self._workers.append(asyncio.create_task(self._worker_loop(subject, callback)))
             logger.info(f"Registered {n_workers} workers for {subject}")
             
