@@ -1,3 +1,4 @@
+import asyncio
 from abc import ABC, abstractmethod
 
 from hooklet.base.node import Node
@@ -30,9 +31,5 @@ class RPCClient:
     def __init__(self, reqreply: ReqReply):
         self.reqreply = reqreply
 
-    async def request(self, subject: str, req: Req) -> Reply:
-        try:
-            return await self.reqreply.request(subject, req)
-        except Exception as e:
-            raise  # Re-raise the exception
-
+    async def request(self, subject: str, req: Req, timeout: float = 10.0) -> Reply:
+        return await self.reqreply.request(subject, req, timeout)

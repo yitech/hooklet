@@ -146,12 +146,11 @@ class HookletLoggerConfig:
         """Normalize log level to integer."""
         if isinstance(level, LogLevel):
             return level.value
-        elif isinstance(level, str):
+        if isinstance(level, str):
             return getattr(logging, level.upper())
-        elif isinstance(level, int):
+        if isinstance(level, int):
             return level
-        else:
-            raise ValueError(f"Invalid log level: {level}")
+        raise ValueError(f"Invalid log level: {level}")
 
     def _validate(self):
         """Validate configuration parameters."""
@@ -286,7 +285,7 @@ class HookletLogger:
             message: Log message
             **extra_fields: Additional fields to include
         """
-        record = self.logger.makeRecord(self.logger.name, level, "", 0, message, (), None)
+        record = self.logger.makeRecord(self.logger.name, level, "", 0, message, (), exc_info=None)
         if extra_fields:
             record.extra_fields = {**self.config.extra_fields, **extra_fields}
         else:
@@ -309,7 +308,13 @@ class HookletLogger:
 
         # Create a record for start event
         start_record = self.logger.makeRecord(
-            self.logger.name, logging.INFO, "performance", 0, "Performance measurement", (), None
+            self.logger.name,
+            logging.INFO,
+            "performance",
+            0,
+            "Performance measurement",
+            (),
+            exc_info=None,
         )
         start_record.funcName = "performance_context"
         start_record.operation = operation
@@ -330,7 +335,7 @@ class HookletLogger:
                 0,
                 "Performance measurement",
                 (),
-                None,
+                exc_info=None,
             )
             complete_record.funcName = "performance_context"
             complete_record.operation = operation
@@ -351,7 +356,7 @@ class HookletLogger:
                 0,
                 "Performance measurement",
                 (),
-                None,
+                exc_info=None,
             )
             error_record.funcName = "performance_context"
             error_record.operation = operation
@@ -464,7 +469,6 @@ def log_performance(operation: str = None):
 
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
-        else:
-            return sync_wrapper
+        return sync_wrapper
 
     return decorator

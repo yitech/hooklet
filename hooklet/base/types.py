@@ -1,4 +1,4 @@
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 
 class Msg(TypedDict):
@@ -32,5 +32,5 @@ class Job(TypedDict):
     recv_ms: int
     start_ms: int
     end_ms: int
-    status: str
+    status: Literal["new", "running", "finished", "failed", "cancelled"]
     retry_count: int

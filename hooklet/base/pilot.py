@@ -34,7 +34,7 @@ class PubSub(ABC):
 class ReqReply(ABC):
 
     @abstractmethod
-    async def request(self, subject: str, req: Req) -> Reply:
+    async def request(self, subject: str, req: Req, timeout: float = 10.0) -> Reply:
         """
         Request data from a specific subject.
         """
@@ -136,7 +136,7 @@ class Pilot(ABC):
         Get the req/reply interface.
         """
         raise NotImplementedError("Subclasses must implement reqreply()")
-    
+
     @abstractmethod
     def pushpull(self) -> PushPull:
         """
