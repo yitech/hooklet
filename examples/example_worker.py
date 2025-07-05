@@ -186,6 +186,98 @@ class DataAnalyzerWorker(Worker):
             return 1
 
 
+class JobStatusSubscriber:
+    """Subscriber that monitors job status changes"""
+    
+    def __init__(self, name: str, dispatcher: Dispatcher):
+        self.name = name
+        self.dispatcher = dispatcher
+        self.job_statuses = {}
+    
+    async def start(self):
+        """Start monitoring job status changes"""
+        print(f"📊 {self.name} started monitoring job status changes...")
+        
+        # Subscribe to all job subjects
+        await self.dispatcher.subscribe("text-processing", self._job_status_handler)
+        await self.dispatcher.subscribe("image-processing", self._job_status_handler)
+        await self.dispatcher.subscribe("data-analysis", self._job_status_handler)
+    
+    async def _job_status_handler(self, job: Job):
+        """Handle job status updates"""
+        job_id = job.get('_id')
+        status = job.get('status')
+        job_type = job.get('type')
+        subject = self._get_subject_from_job(job)
+        
+        # Track job status changes
+        if job_id not in self.job_statuses:
+            self.job_statuses[job_id] = {}
+        
+        self.job_statuses[job_id].update({
+            'status': status,
+            'type': job_type,
+            'subject': subject,
+            'timestamp': time.time()
+        })
+        
+        # Print status update with appropriate emoji
+        status_emoji = self._get_status_emoji(status)
+        duration = ""
+        
+        if status in ["running", "finished", "failed", "cancelled"]:
+            start_ms = job.get('start_ms', 0)
+            end_ms = job.get('end_ms', 0)
+            if start_ms > 0 and end_ms > 0:
+                duration = f" ({(end_ms - start_ms)}ms)"
+            elif start_ms > 0:
+                current_ms = int(time.time() * 1000)
+                duration = f" ({(current_ms - start_ms)}ms)"
+        
+        print(f"{status_emoji} Job {job_id[:8]} [{subject}] {job_type}: {status}{duration}")
+        
+        # Print error if job failed
+        if status == "failed" and job.get('error'):
+            print(f"   ❌ Error: {job.get('error')}")
+    
+    def _get_subject_from_job(self, job: Job) -> str:
+        """Determine the subject from job data"""
+        data = job.get('data', {})
+        if 'text' in data:
+            return "text-processing"
+        elif 'numbers' in data:
+            return "data-analysis"
+        else:
+            return "image-processing"
+    
+    def _get_status_emoji(self, status: str) -> str:
+        """Get appropriate emoji for job status"""
+        status_emojis = {
+            "new": "🆕",
+            "running": "⚡",
+            "finished": "✅",
+            "failed": "❌",
+            "cancelled": "🚫"
+        }
+        return status_emojis.get(status, "❓")
+    
+    async def stop(self):
+        """Stop monitoring job status changes"""
+        print(f"🛑 {self.name} stopped monitoring")
+        print(f"📈 Total jobs tracked: {len(self.job_statuses)}")
+        
+        # Print summary
+        status_counts = {}
+        for job_info in self.job_statuses.values():
+            status = job_info.get('status', 'unknown')
+            status_counts[status] = status_counts.get(status, 0) + 1
+        
+        print("📊 Job Status Summary:")
+        for status, count in status_counts.items():
+            emoji = self._get_status_emoji(status)
+            print(f"   {emoji} {status}: {count}")
+
+
 class JobDispatcher:
     """Helper class to dispatch jobs to different workers"""
     
@@ -255,9 +347,13 @@ async def run_demo():
     image_worker = ImageProcessorWorker("image-worker", pilot.pushpull())
     data_worker = DataAnalyzerWorker("data-worker", pilot.pushpull())
     
-    # Create dispatcher
+    # Create dispatcher and job status subscriber
     dispatcher = Dispatcher(pilot.pushpull())
     job_dispatcher = JobDispatcher(dispatcher)
+    status_subscriber = JobStatusSubscriber("job-monitor", dispatcher)
+    
+    # Start status subscriber first
+    await status_subscriber.start()
     
     # Start workers
     await text_worker.start()
@@ -286,14 +382,21 @@ async def run_demo():
     await job_dispatcher.dispatch_data_job("find_max", [3, 7, 2, 9, 1])
     await job_dispatcher.dispatch_data_job("find_min", [5, 8, 2, 10, 3])
     
+    # Add some jobs that will fail to demonstrate error handling
+    print("\n📤 Dispatching jobs that will fail...")
+    await job_dispatcher.dispatch_data_job("calculate_mean", [])  # Empty list will fail
+    await job_dispatcher.dispatch_data_job("find_max", [])  # Empty list will fail
+    await job_dispatcher.dispatch_text_job("unknown_type", "test")  # Unknown job type
+    
     # Let workers process the jobs
     print("\n⏳ Waiting for workers to process all jobs...")
-    await asyncio.sleep(8)
+    await asyncio.sleep(10)  # Increased wait time for failed jobs
     
     # Stop everything
     await text_worker.close()
     await image_worker.close()
     await data_worker.close()
+    await status_subscriber.stop()
     
     print("\n" + "=" * 60)
     print("✅ Worker Job Processing Demo completed!")
