@@ -236,6 +236,8 @@ class TestNatsPushPull:
         pilot = MagicMock()
         pilot.is_connected.return_value = True
         pilot._nats_client = AsyncMock()
+        # Mock the jetstream method to avoid async warnings
+        pilot._nats_client.jetstream = MagicMock(return_value=MagicMock())
         return pilot
 
     @pytest.fixture
@@ -290,9 +292,12 @@ class TestNatsPushPull:
     @pytest.mark.asyncio
     async def test_ensure_stream_creates_new(self, pushpull, mock_pilot):
         """Test stream creation when it doesn't exist."""
+        # Create a proper mock that doesn't trigger async warnings
         mock_js = MagicMock()
         mock_js.streams_info = AsyncMock(side_effect=Exception("Stream not found"))
         mock_js.add_stream = AsyncMock(return_value=None)
+        
+        # Set the mock after creating the pushpull instance to avoid initialization issues
         pushpull._js = mock_js
         
         await pushpull._ensure_stream("test.jobs")
@@ -337,16 +342,18 @@ class TestNatsPushPull:
     @pytest.mark.asyncio
     async def test_push_success(self, pushpull, mock_pilot, sample_job):
         """Test successful job push."""
-        mock_js = MagicMock()
-        mock_js.streams_info = AsyncMock(side_effect=Exception("Stream not found"))
-        mock_js.add_stream = AsyncMock(return_value=None)
+        mock_js = MagicMock()  # ✅ Use AsyncMock for async interface
+
+        mock_js.streams_info = MagicMock(side_effect=Exception("Stream not found"))  # if awaited
+        mock_js.add_stream = AsyncMock(return_value=None)  # ✅ so `await` works
         mock_ack = MagicMock()
         mock_ack.seq = 123
-        mock_js.publish = AsyncMock(return_value=mock_ack)
+        mock_js.publish = AsyncMock(return_value=mock_ack)  # ✅ so `await` works
+
         pushpull._js = mock_js
-        
+
         result = await pushpull.push("test.jobs", sample_job)
-        
+
         assert result is True
         assert sample_job["status"] == "new"
         assert "recv_ms" in sample_job
