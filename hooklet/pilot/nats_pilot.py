@@ -391,9 +391,11 @@ class NatsPushPull(PushPull):
 
 
 class NatsPilot(Pilot):
-    def __init__(self, nats_url: str = "nats://localhost:4222", **kwargs) -> None:
+    def __init__(self, nats_urls: list[str]|None = None, **kwargs) -> None:
         super().__init__()
-        self._nats_url = nats_url
+        if nats_urls is None:
+            nats_urls = ["nats://localhost:4222"]
+        self._nats_urls = nats_urls
         self._nats_client = NATS()
         self._connected = False
         self._pubsub = NatsPubSub(self)
@@ -406,9 +408,9 @@ class NatsPilot(Pilot):
 
     async def connect(self) -> None:
         try:
-            await self._nats_client.connect(self._nats_url, **self._kwargs)
+            await self._nats_client.connect(servers=self._nats_urls, **self._kwargs)
             self._connected = True
-            logger.info(f"NatsPilot connected to {self._nats_url}")
+            logger.info(f"NatsPilot connected to {self._nats_urls}")
         except Exception as e:
             logger.error(f"Failed to connect to NATS at {self._nats_url}: {e}", exc_info=True)
             raise
