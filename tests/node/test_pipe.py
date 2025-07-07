@@ -159,7 +159,7 @@ class TestPipe:
         async def message_handler(msg):
             received_messages.append(msg)
         
-        pilot.pubsub().subscribe("test.output.processed_test_data", message_handler)
+        await pilot.pubsub().subscribe("test.output.processed_test_data", message_handler)
         
         await pipe_1to1.start()
         
