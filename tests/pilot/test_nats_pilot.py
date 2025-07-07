@@ -217,14 +217,21 @@ class TestNatsPilot:
     async def test_context_manager(self):
         """Test using NatsPilot as async context manager."""
         with patch('hooklet.pilot.nats_pilot.NATS') as mock_nats_class:
+            # Create a fully async mock client
             mock_nats_client = AsyncMock()
+            mock_nats_client.connect = AsyncMock()
+            mock_nats_client.close = AsyncMock()
+            mock_nats_client.is_connected = True
             mock_nats_class.return_value = mock_nats_client
-            
-            # Create pilot after patching NATS
+
             pilot = NatsPilot(["nats://localhost:4222"])
-            
+
             async with pilot:
                 assert pilot.is_connected()
+
+            # Verify all async calls were made
+            mock_nats_client.connect.assert_awaited_once()
+            mock_nats_client.close.assert_awaited_once()
             assert not pilot.is_connected()
 
 class TestNatsPushPull:
@@ -235,9 +242,19 @@ class TestNatsPushPull:
         """Create a mock pilot for testing."""
         pilot = MagicMock()
         pilot.is_connected.return_value = True
-        pilot._nats_client = AsyncMock()
-        # Mock the jetstream method to avoid async warnings
-        pilot._nats_client.jetstream = MagicMock(return_value=MagicMock())
+
+        # Create a more specific mock for NATS client
+        mock_nats_client = MagicMock()
+
+        # Mock jetstream to return a MagicMock (not AsyncMock unless it's truly async)
+        mock_js = MagicMock()  # JetStreamContext mock
+        mock_nats_client.jetstream = MagicMock(return_value=mock_js)  # Not AsyncMock
+
+        # Only make actually async methods into AsyncMock
+        mock_nats_client.subscribe = AsyncMock()
+        mock_nats_client.publish = AsyncMock()
+
+        pilot._nats_client = mock_nats_client
         return pilot
 
     @pytest.fixture
@@ -260,7 +277,8 @@ class TestNatsPushPull:
             retry_count=0
         )
 
-    def test_init(self, pushpull):
+    @pytest.mark.asyncio
+    async def test_init(self, pushpull, mock_pilot):
         """Test NatsPushPull initialization."""
         assert pushpull._pilot is not None
         assert pushpull._nats_client is not None
@@ -268,6 +286,9 @@ class TestNatsPushPull:
         assert pushpull._workers == []
         assert pushpull._nats_subscriptions == {}
         assert pushpull._shutdown_event is not None
+    
+        # Verify jetstream was called (add if it's supposed to be called during init)
+        mock_pilot._nats_client.jetstream.assert_called_once()
 
     def test_stream_name(self, pushpull):
         """Test stream name generation."""
@@ -400,7 +421,9 @@ class TestNatsPushPull:
         mock_js.consumers_info = AsyncMock(side_effect=Exception("Consumer not found"))
         mock_js.pull_subscribe = AsyncMock(side_effect=Exception("Pull subscribe failed"))
         pushpull._js = mock_js
-        callback = AsyncMock()
+        
+        async def callback(job):
+            pass
         
         with pytest.raises(Exception, match="Pull subscribe failed"):
             await pushpull.register_worker("test.jobs", callback, n_workers=1)

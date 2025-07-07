@@ -117,7 +117,7 @@ class TestEmitter:
         # Subscribe to the expected subjects
         for i in range(3):
             subject = f"test.subject.test_data_{i}"
-            pilot.pubsub().subscribe(subject, message_handler)
+            await pilot.pubsub().subscribe(subject, message_handler)
         
         await emitter.start()
         

@@ -412,7 +412,7 @@ class NatsPilot(Pilot):
             self._connected = True
             logger.info(f"NatsPilot connected to {self._nats_urls}")
         except Exception as e:
-            logger.error(f"Failed to connect to NATS at {self._nats_url}: {e}", exc_info=True)
+            logger.error(f"Failed to connect to NATS at {self._nats_urls}: {e}", exc_info=True)
             raise
 
     async def disconnect(self) -> None:
