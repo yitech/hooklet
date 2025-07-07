@@ -19,7 +19,7 @@ def suppress_async_mock_warnings():
 @pytest.mark.integration
 async def test_nats_pilot_connection():
     """Test basic connection functionality"""
-    pilot = NatsPilot(nats_url="nats://localhost:4222")
+    pilot = NatsPilot(nats_urls=["nats://localhost:4222"])
     
     # Test initial state
     assert not pilot.is_connected()
@@ -39,7 +39,7 @@ async def test_nats_pilot_connection():
 @pytest.mark.integration
 async def test_nats_pilot_pubsub():
     """Test pub/sub functionality"""
-    pilot = NatsPilot(nats_url="nats://localhost:4222")
+    pilot = NatsPilot(nats_urls=["nats://localhost:4222"])
     
     try:
         await pilot.connect()
@@ -74,7 +74,7 @@ async def test_nats_pilot_pubsub():
 @pytest.mark.integration
 async def test_nats_pilot_reqreply():
     """Test request-reply functionality"""
-    pilot = NatsPilot(nats_url="nats://localhost:4222")
+    pilot = NatsPilot(nats_urls=["nats://localhost:4222"])
     
     try:
         await pilot.connect()
@@ -107,7 +107,7 @@ async def test_nats_pilot_reqreply():
 @pytest.mark.integration
 async def test_nats_pilot_pushpull():
     """Test push-pull functionality with JetStream"""
-    pilot = NatsPilot(nats_url="nats://localhost:4222")
+    pilot = NatsPilot(nats_urls=["nats://localhost:4222"])
     
     try:
         await pilot.connect()
@@ -155,7 +155,7 @@ async def test_nats_pilot_pushpull():
 @pytest.mark.integration
 async def test_nats_pilot_context_manager():
     """Test context manager functionality"""
-    pilot = NatsPilot(nats_url="nats://localhost:4222")
+    pilot = NatsPilot(nats_urls=["nats://localhost:4222"])
     
     try:
         async with pilot:
@@ -170,7 +170,7 @@ class TestNatsPilot:
     @pytest.fixture
     def pilot(self):
         """Create a fresh NatsPilot instance for each test."""
-        return NatsPilot("nats://localhost:4222")
+        return NatsPilot(["nats://localhost:4222"])
 
     @pytest.fixture
     def sample_job(self):
@@ -203,11 +203,11 @@ class TestNatsPilot:
             mock_nats_class.return_value = mock_nats_client
             
             # Create pilot after patching NATS
-            pilot = NatsPilot("nats://localhost:4222")
+            pilot = NatsPilot(["nats://localhost:4222"])
             
             await pilot.connect()
             assert pilot.is_connected()
-            mock_nats_client.connect.assert_called_once_with("nats://localhost:4222")
+            mock_nats_client.connect.assert_called_once_with(servers=["nats://localhost:4222"])
             
             await pilot.disconnect()
             assert not pilot.is_connected()
@@ -221,7 +221,7 @@ class TestNatsPilot:
             mock_nats_class.return_value = mock_nats_client
             
             # Create pilot after patching NATS
-            pilot = NatsPilot("nats://localhost:4222")
+            pilot = NatsPilot(["nats://localhost:4222"])
             
             async with pilot:
                 assert pilot.is_connected()
@@ -668,7 +668,7 @@ class TestNatsPushPull:
 @pytest.mark.integration
 async def test_nats_pushpull_integration():
     """Integration test for NatsPushPull with real NATS server."""
-    pilot = NatsPilot(nats_url="nats://localhost:4222")
+    pilot = NatsPilot(nats_urls=["nats://localhost:4222"])
     
     try:
         await pilot.connect()
