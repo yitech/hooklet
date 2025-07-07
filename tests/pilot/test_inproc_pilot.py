@@ -98,26 +98,28 @@ class TestInprocPubSub:
     async def test_publish(self, pubsub, sample_msg, mock_callback):
         """Test publishing a message."""
         subject = "test.subject"
-        pubsub.subscribe(subject, mock_callback)
+        await pubsub.subscribe(subject, mock_callback)
         await pubsub.publish(subject, sample_msg)
         mock_callback.assert_awaited_once_with(sample_msg)
 
-    def test_subscribe(self, pubsub, mock_callback):
+    @pytest.mark.asyncio
+    async def test_subscribe(self, pubsub, mock_callback):
         """Test subscribing to a subject."""
         subject = "test.subject"
-        subscription_id = pubsub.subscribe(subject, mock_callback)
+        subscription_id = await pubsub.subscribe(subject, mock_callback)
         
         assert subscription_id == id(mock_callback)
         assert mock_callback in pubsub._subscriptions[subject]
 
-    def test_subscribe_multiple_callbacks(self, pubsub):
+    @pytest.mark.asyncio
+    async def test_subscribe_multiple_callbacks(self, pubsub):
         """Test subscribing multiple callbacks to the same subject."""
         subject = "test.subject"
         callback1 = AsyncMock()
         callback2 = AsyncMock()
         
-        sub_id1 = pubsub.subscribe(subject, callback1)
-        sub_id2 = pubsub.subscribe(subject, callback2)
+        sub_id1 = await pubsub.subscribe(subject, callback1)
+        sub_id2 = await pubsub.subscribe(subject, callback2)
         
         assert sub_id1 == id(callback1)
         assert sub_id2 == id(callback2)
@@ -125,35 +127,39 @@ class TestInprocPubSub:
         assert callback1 in pubsub._subscriptions[subject]
         assert callback2 in pubsub._subscriptions[subject]
 
-    def test_unsubscribe_success(self, pubsub, mock_callback):
+    @pytest.mark.asyncio
+    async def test_unsubscribe_success(self, pubsub, mock_callback):
         """Test successful unsubscription."""
         subject = "test.subject"
-        subscription_id = pubsub.subscribe(subject, mock_callback)
+        subscription_id = await pubsub.subscribe(subject, mock_callback)
         
-        result = pubsub.unsubscribe(subject, subscription_id)
+        result = await pubsub.unsubscribe(subject, subscription_id)
         
         assert result is True
         assert mock_callback not in pubsub._subscriptions[subject]
 
-    def test_unsubscribe_nonexistent_subject(self, pubsub):
+    @pytest.mark.asyncio
+    async def test_unsubscribe_nonexistent_subject(self, pubsub):
         """Test unsubscription from non-existent subject."""
-        result = pubsub.unsubscribe("nonexistent.subject", 123)
+        result = await pubsub.unsubscribe("nonexistent.subject", 123)
         assert result is False
 
-    def test_unsubscribe_nonexistent_id(self, pubsub, mock_callback):
+    @pytest.mark.asyncio
+    async def test_unsubscribe_nonexistent_id(self, pubsub, mock_callback):
         """Test unsubscription with non-existent subscription ID."""
         subject = "test.subject"
-        pubsub.subscribe(subject, mock_callback)
+        await pubsub.subscribe(subject, mock_callback)
         
-        result = pubsub.unsubscribe(subject, 99999)  # Non-existent ID
+        result = await pubsub.unsubscribe(subject, 99999)  # Non-existent ID
         
         assert result is False
         assert mock_callback in pubsub._subscriptions[subject]  # Should still be subscribed
 
-    def test_get_subscriptions(self, pubsub, mock_callback):
+    @pytest.mark.asyncio
+    async def test_get_subscriptions(self, pubsub, mock_callback):
         """Test getting subscriptions for a subject."""
         subject = "test.subject"
-        pubsub.subscribe(subject, mock_callback)
+        await pubsub.subscribe(subject, mock_callback)
         
         subscriptions = pubsub.get_subscriptions(subject)
         
@@ -173,8 +179,8 @@ class TestInprocPubSub:
         successful_callback = AsyncMock()
         failing_callback = AsyncMock(side_effect=Exception("Test error"))
         
-        pubsub.subscribe(subject, successful_callback)
-        pubsub.subscribe(subject, failing_callback)
+        await pubsub.subscribe(subject, successful_callback)
+        await pubsub.subscribe(subject, failing_callback)
         
         # Publish should not raise an exception
         await pubsub.publish(subject, sample_msg)
@@ -280,7 +286,7 @@ class TestInprocPilotIntegration:
             received_messages.append(msg)
         
         subject = "test.subject"
-        subscription_id = pubsub.subscribe(subject, message_handler)
+        subscription_id = await pubsub.subscribe(subject, message_handler)
         
         await pubsub.publish(subject, sample_msg)
         
@@ -291,7 +297,7 @@ class TestInprocPilotIntegration:
         assert received_messages[0] == sample_msg
         
         # Test unsubscription
-        success = pubsub.unsubscribe(subject, subscription_id)
+        success = await pubsub.unsubscribe(subject, subscription_id)
         assert success is True
 
     @pytest.mark.asyncio
@@ -330,8 +336,8 @@ class TestInprocPilotIntegration:
             received_messages2.append(msg)
         
         subject = "test.subject"
-        pubsub.subscribe(subject, handler1)
-        pubsub.subscribe(subject, handler2)
+        await pubsub.subscribe(subject, handler1)
+        await pubsub.subscribe(subject, handler2)
         
         await pubsub.publish(subject, sample_msg)
         
