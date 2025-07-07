@@ -51,7 +51,7 @@ class InprocReqReply(ReqReply):
     def __init__(self) -> None:
         self._callbacks: Dict[str, Callable[[Any], Awaitable[Any]]] = {}
 
-    async def request(self, subject: str, data: Req) -> Any:
+    async def request(self, subject: str, data: Req, timeout: float = 10.0) -> Any:
         if subject not in self._callbacks:
             raise ValueError(f"No callback registered for {subject}")
         return await self._callbacks[subject](data)

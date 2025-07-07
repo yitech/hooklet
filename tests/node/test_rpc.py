@@ -308,7 +308,7 @@ class TestRPCClient:
         response = await client.request("test-subject", test_req)
         
         assert response == mock_response
-        mock_reqreply.request.assert_called_once_with("test-subject", test_req)
+        mock_reqreply.request.assert_called_once_with("test-subject", test_req, 10.0)
 
 
 class TestRPCIntegration:

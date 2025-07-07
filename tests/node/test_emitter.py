@@ -272,7 +272,8 @@ class TestEmitter:
         async def message_handler(msg):
             received_messages.append(msg)
         
-        pilot.pubsub().subscribe("custom.test", message_handler)
+        await pilot.pubsub().subscribe("custom.test", message_handler)
+        await pilot.pubsub().publish("test-emitter", {"type": "test_message", "data": "test_data"})
         
         await emitter.start()
         await asyncio.sleep(0.3)
@@ -328,8 +329,8 @@ class TestEmitterIntegration:
             subscriber2_messages.append(msg)
         
         # Subscribe to subjects
-        pilot.pubsub().subscribe("integration.subject.data_0", subscriber1_handler)
-        pilot.pubsub().subscribe("integration.subject.data_1", subscriber2_handler)
+        await pilot.pubsub().subscribe("integration.subject.data_0", subscriber1_handler)
+        await pilot.pubsub().subscribe("integration.subject.data_1", subscriber2_handler)
         
         # Start emitter
         await emitter.start()
