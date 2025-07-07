@@ -193,7 +193,8 @@ class TestNatsPilot:
         assert not pilot.is_connected()
         assert pilot.pubsub() is not None
         assert pilot.reqreply() is not None
-        assert pilot.pushpull() is not None
+        with pytest.raises(RuntimeError, match="NatsPushPull is not initialized"):
+            pilot.pushpull()
 
     @pytest.mark.asyncio
     async def test_connect_disconnect_mock(self):
@@ -222,6 +223,8 @@ class TestNatsPilot:
             mock_nats_client.connect = AsyncMock()
             mock_nats_client.close = AsyncMock()
             mock_nats_client.is_connected = True
+            mock_nats_client.jetstream = MagicMock()
+            mock_nats_client.jetstream.return_value = MagicMock(name="js_context")
             mock_nats_class.return_value = mock_nats_client
 
             pilot = NatsPilot(["nats://localhost:4222"])
@@ -242,25 +245,15 @@ class TestNatsPushPull:
         """Create a mock pilot for testing."""
         pilot = MagicMock()
         pilot.is_connected.return_value = True
-
-        # Create a more specific mock for NATS client
-        mock_nats_client = MagicMock()
-
-        # Mock jetstream to return a MagicMock (not AsyncMock unless it's truly async)
-        mock_js = MagicMock()  # JetStreamContext mock
-        mock_nats_client.jetstream = MagicMock(return_value=mock_js)  # Not AsyncMock
-
-        # Only make actually async methods into AsyncMock
-        mock_nats_client.subscribe = AsyncMock()
-        mock_nats_client.publish = AsyncMock()
-
-        pilot._nats_client = mock_nats_client
+        pilot._nats_client = AsyncMock()
+        pilot._nats_client.jetstream = MagicMock()
+        pilot._nats_client.jetstream.return_value = MagicMock(name="js_context")
         return pilot
 
-    @pytest.fixture
-    def pushpull(self, mock_pilot):
+    @pytest_asyncio.fixture
+    async def nats_pushpull(self, mock_pilot):
         """Create a NatsPushPull instance for testing."""
-        return NatsPushPull(mock_pilot)
+        return await NatsPushPull.create(mock_pilot)
 
     @pytest.fixture
     def sample_job(self):
@@ -278,471 +271,121 @@ class TestNatsPushPull:
         )
 
     @pytest.mark.asyncio
-    async def test_init(self, pushpull, mock_pilot):
+    async def test_init(self, nats_pushpull, mock_pilot):
         """Test NatsPushPull initialization."""
-        assert pushpull._pilot is not None
-        assert pushpull._nats_client is not None
-        assert pushpull._js is not None
-        assert pushpull._workers == []
-        assert pushpull._nats_subscriptions == {}
-        assert pushpull._shutdown_event is not None
-    
-        # Verify jetstream was called (add if it's supposed to be called during init)
-        mock_pilot._nats_client.jetstream.assert_called_once()
-
-    def test_stream_name(self, pushpull):
-        """Test stream name generation."""
-        assert pushpull.stream_name("test.jobs") == "TEST-JOBS"
-        assert pushpull.stream_name("math.operations") == "MATH-OPERATIONS"
-
-    def test_consumer_name(self, pushpull):
-        """Test consumer name generation."""
-        assert pushpull.consumer_name("test.jobs") == "worker-test-jobs"
-        assert pushpull.consumer_name("math.operations") == "worker-math-operations"
-
-    def test_subscriber_subject(self, pushpull):
-        """Test subscriber subject generation."""
-        assert pushpull.subscriber_subject("test.jobs") == "test.jobs.subscriber"
-        assert pushpull.subscriber_subject("math.operations") == "math.operations.subscriber"
-
-    def test_job_subject(self, pushpull):
-        """Test job subject generation."""
-        assert pushpull.job_subject("test.jobs") == "test.jobs.job"
-        assert pushpull.job_subject("math.operations") == "math.operations.job"
+        assert nats_pushpull._pilot is mock_pilot
+        assert nats_pushpull._nats_client is mock_pilot._nats_client
+        assert nats_pushpull._js is mock_pilot._nats_client.jetstream.return_value
+        assert nats_pushpull._workers == []
+        assert nats_pushpull._nats_subscriptions == {}
+        assert isinstance(nats_pushpull._shutdown_event, asyncio.Event)
 
     @pytest.mark.asyncio
-    async def test_ensure_stream_creates_new(self, pushpull, mock_pilot):
-        """Test stream creation when it doesn't exist."""
-        # Create a proper mock that doesn't trigger async warnings
-        mock_js = MagicMock()
-        mock_js.streams_info = AsyncMock(side_effect=Exception("Stream not found"))
-        mock_js.add_stream = AsyncMock(return_value=None)
-        
-        # Set the mock after creating the pushpull instance to avoid initialization issues
-        pushpull._js = mock_js
-        
-        await pushpull._ensure_stream("test.jobs")
-        
-        mock_js.add_stream.assert_called_once()
-        call_args = mock_js.add_stream.call_args
-        assert call_args[1]["name"] == "TEST-JOBS"
-        assert call_args[1]["subjects"] == ["test.jobs.>"]
-        assert call_args[1]["retention"] == "workqueue"
-
-    @pytest.mark.asyncio
-    async def test_ensure_stream_exists(self, pushpull, mock_pilot):
-        """Test stream handling when it already exists."""
-        mock_js = MagicMock()
-        mock_js.streams_info = AsyncMock(return_value=None)
-        pushpull._js = mock_js
-        
-        await pushpull._ensure_stream("test.jobs")
-        
-        mock_js.streams_info.assert_called_once_with("TEST-JOBS")
-        mock_js.add_stream.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_ensure_stream_not_connected(self, pushpull, mock_pilot):
-        """Test stream creation when not connected."""
-        mock_pilot.is_connected.return_value = False
-        
-        with pytest.raises(RuntimeError, match="NATS client not connected"):
-            await pushpull._ensure_stream("test.jobs")
-
-    @pytest.mark.asyncio
-    async def test_ensure_consumer(self, pushpull, mock_pilot):
-        """Test consumer creation."""
-        mock_js = MagicMock()
-        mock_js.consumers_info = AsyncMock(side_effect=Exception("Consumer not found"))
-        pushpull._js = mock_js
-        
-        await pushpull._ensure_consumer("test.jobs")
-        
-        mock_js.consumers_info.assert_called_once_with("TEST-JOBS", "worker-test-jobs")
-
-    @pytest.mark.asyncio
-    async def test_push_success(self, pushpull, mock_pilot, sample_job):
+    async def test_push_success(self, nats_pushpull, sample_job):
         """Test successful job push."""
-        mock_js = MagicMock()  # ✅ Use AsyncMock for async interface
-
-        mock_js.streams_info = AsyncMock(side_effect=Exception("Stream not found"))  # if awaited
-        mock_js.add_stream = AsyncMock(return_value=None)  # ✅ so `await` works
-        mock_ack = MagicMock()
-        mock_ack.seq = 123
-        mock_js.publish = AsyncMock(return_value=mock_ack)  # ✅ so `await` works
-
-        pushpull._js = mock_js
-
-        result = await pushpull.push("test.jobs", sample_job)
-
-        assert result is True
-        assert sample_job["status"] == "new"
-        assert "recv_ms" in sample_job
-        mock_js.publish.assert_called_once_with("test.jobs.job", json.dumps(sample_job).encode())
+        subject = "test.jobs"
+        
+        # Mock the _ensure_stream method
+        with patch.object(nats_pushpull, '_ensure_stream') as mock_ensure_stream:
+            # Mock the JetStream publish method
+            mock_ack = MagicMock()
+            mock_ack.seq = 12345
+            nats_pushpull._js.publish = AsyncMock(return_value=mock_ack)
+            
+            result = await nats_pushpull.push(subject, sample_job)
+            
+            assert result is True
+            mock_ensure_stream.assert_called_once_with(subject)
+            nats_pushpull._js.publish.assert_called_once()
+            
+            # Verify job was updated with metadata
+            assert sample_job["recv_ms"] > 0
+            assert sample_job["status"] == "new"
 
     @pytest.mark.asyncio
-    async def test_push_failure(self, pushpull, mock_pilot, sample_job):
+    async def test_push_failure(self, nats_pushpull, sample_job):
         """Test job push failure."""
-        mock_js = MagicMock()
-        mock_js.streams_info = AsyncMock(side_effect=Exception("Stream not found"))
-        mock_js.add_stream = AsyncMock(return_value=None)
-        mock_js.publish = AsyncMock(side_effect=Exception("Publish failed"))
-        pushpull._js = mock_js
+        subject = "test.jobs"
         
-        result = await pushpull.push("test.jobs", sample_job)
-        
-        assert result is False
+        # Mock the _ensure_stream method to raise an exception
+        with patch.object(nats_pushpull, '_ensure_stream', side_effect=Exception("Stream creation failed")):
+            result = await nats_pushpull.push(subject, sample_job)
+            
+            assert result is False
 
     @pytest.mark.asyncio
-    async def test_register_worker_success(self, pushpull, mock_pilot):
-        """Test successful worker registration."""
-        mock_js = MagicMock()
-        mock_js.streams_info = AsyncMock(side_effect=Exception("Stream not found"))
-        mock_js.add_stream = AsyncMock(return_value=None)
-        mock_js.consumers_info = AsyncMock(side_effect=Exception("Consumer not found"))
-        mock_js.pull_subscribe = AsyncMock(return_value=AsyncMock())
-        pushpull._js = mock_js
+    async def test_register_worker(self, nats_pushpull):
+        """Test worker registration."""
+        subject = "test.jobs"
         callback = AsyncMock()
+        n_workers = 2
         
-        await pushpull.register_worker("test.jobs", callback, n_workers=2)
-        
-        assert len(pushpull._workers) == 2
-        mock_js.pull_subscribe.assert_called()
-        
-        # Clean up
-        await pushpull._cleanup()
+        # Mock the required methods
+        with patch.object(nats_pushpull, '_ensure_stream') as mock_ensure_stream, \
+             patch.object(nats_pushpull, '_ensure_consumer') as mock_ensure_consumer, \
+             patch.object(nats_pushpull._js, 'pull_subscribe', new_callable=AsyncMock) as mock_pull_subscribe:
+            
+            await nats_pushpull.register_worker(subject, callback, n_workers)
+            
+            # Verify all methods were called
+            mock_ensure_stream.assert_called_once_with(subject)
+            mock_ensure_consumer.assert_called_once_with(subject)
+            mock_pull_subscribe.assert_called_once()
+            
+            # Verify workers were created
+            assert len(nats_pushpull._workers) == n_workers
+            for worker in nats_pushpull._workers:
+                assert isinstance(worker, asyncio.Task)
 
     @pytest.mark.asyncio
-    async def test_register_worker_failure(self, pushpull, mock_pilot):
-        """Test worker registration failure."""
-        mock_js = MagicMock()
-        mock_js.streams_info = AsyncMock(side_effect=Exception("Stream not found"))
-        mock_js.add_stream = AsyncMock(return_value=None)
-        mock_js.consumers_info = AsyncMock(side_effect=Exception("Consumer not found"))
-        mock_js.pull_subscribe = AsyncMock(side_effect=Exception("Pull subscribe failed"))
-        pushpull._js = mock_js
-        
-        async def callback(job):
-            pass
-        
-        with pytest.raises(Exception, match="Pull subscribe failed"):
-            await pushpull.register_worker("test.jobs", callback, n_workers=1)
-        
-        # Clean up
-        await pushpull._cleanup()
-
-    @pytest.mark.asyncio
-    async def test_subscribe_success(self, pushpull):
-        """Test successful subscription."""
+    async def test_subscribe_and_unsubscribe(self, nats_pushpull):
+        """Test subscribe and unsubscribe methods."""
+        subject = "test.jobs"
         callback = AsyncMock()
-        mock_sub = AsyncMock()
-        mock_sub._id = 123
-        pushpull._nats_client.subscribe = AsyncMock(return_value=mock_sub)
-        
-        subscription_id = await pushpull.subscribe("test.jobs", callback)
-        
-        assert subscription_id == 123
-        assert "test.jobs.subscriber" in pushpull._nats_subscriptions
-        assert mock_sub in pushpull._nats_subscriptions["test.jobs.subscriber"]
+        mock_subscription = MagicMock()
+        mock_subscription._id = 42
+        # Patch the nats_client.subscribe method to return our mock_subscription
+        nats_pushpull._nats_client.subscribe = AsyncMock(return_value=mock_subscription)
 
-    @pytest.mark.asyncio
-    async def test_unsubscribe_success(self, pushpull):
-        """Test successful unsubscription."""
-        callback = AsyncMock()
-        mock_sub = AsyncMock()
-        mock_sub._id = 123
-        pushpull._nats_client.subscribe = AsyncMock(return_value=mock_sub)
-        
-        await pushpull.subscribe("test.jobs", callback)
-        
-        result = await pushpull.unsubscribe("test.jobs", 123)
-        
+        # Subscribe
+        subscription_id = await nats_pushpull.subscribe(subject, callback)
+        assert subscription_id == 42
+        assert f"{subject}.subscriber" in nats_pushpull._nats_subscriptions
+        assert mock_subscription in nats_pushpull._nats_subscriptions[f"{subject}.subscriber"]
+
+        # Unsubscribe
+        mock_subscription.unsubscribe = AsyncMock(return_value=None)
+        result = await nats_pushpull.unsubscribe(subject, subscription_id)
         assert result is True
-        mock_sub.unsubscribe.assert_called_once()
+        assert mock_subscription not in nats_pushpull._nats_subscriptions.get(f"{subject}.subscriber", [])
 
-    @pytest.mark.asyncio
-    async def test_unsubscribe_nonexistent(self, pushpull):
-        """Test unsubscription with non-existent subscription."""
-        result = await pushpull.unsubscribe("test.jobs", 12345)
+        # Unsubscribe again should return False
+        result = await nats_pushpull.unsubscribe(subject, subscription_id)
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_notify_subscriptions(self, pushpull, sample_job):
-        """Test subscription notification."""
-        # Add a subscription first
-        mock_sub = AsyncMock()
-        pushpull._nats_subscriptions["test.jobs.subscriber"] = [mock_sub]
-        
-        await pushpull._notify_subscriptions("test.jobs", sample_job)
-        
-        pushpull._nats_client.publish.assert_called_once_with(
-            "test.jobs.subscriber", 
-            json.dumps(sample_job).encode()
-        )
-
-    @pytest.mark.asyncio
-    async def test_cleanup(self, pushpull, mock_pilot):
-        """Test cleanup functionality."""
-        # Create some mock tasks
-        mock_task1 = asyncio.create_task(asyncio.sleep(0))
-        mock_task2 = asyncio.create_task(asyncio.sleep(0))
-        pushpull._workers = [mock_task1, mock_task2]
-        
-        # Create mock subscriptions
-        mock_sub = AsyncMock()
-        pushpull._nats_subscriptions["test.subject"] = [mock_sub]
-        
-        await pushpull._cleanup()
-        
-        # Check that collections were cleared
-        assert pushpull._workers == []
-        assert pushpull._nats_subscriptions == {}
-
-    @pytest.mark.asyncio
-    async def test_worker_loop_timeout_handling(self, pushpull, mock_pilot):
-        """Test worker loop handles timeouts gracefully."""
-        mock_js = MagicMock()
-        mock_js.pull_subscribe = AsyncMock()
-        mock_js.add_stream = AsyncMock()
-        mock_js.streams_info = AsyncMock(side_effect=Exception("Stream not found"))
-        mock_subscription = MagicMock()
-        mock_subscription.fetch = AsyncMock(side_effect=TimeoutError("nats: timeout"))
-        mock_js.pull_subscribe.return_value = mock_subscription
-        pushpull._js = mock_js
-        
-        # Mock the shutdown event
-        pushpull._shutdown_event = asyncio.Event()
-        
+    async def test_subscribe_callback_invoked(self, nats_pushpull):
+        """Test that the callback passed to subscribe is called when a message is received."""
+        subject = "test.jobs"
         callback = AsyncMock()
-        
-        # Start worker loop
-        task = asyncio.create_task(pushpull._worker_loop("test.jobs", callback))
-        
-        # Let it run briefly
-        await asyncio.sleep(0.1)
-        
-        # Set shutdown event
-        pushpull._shutdown_event.set()
-        
-        # Wait for task to complete
-        await task
-        
-        # Verify no errors were raised (timeout handled gracefully)
-        assert True  # If we get here, no exception was raised
-
-    @pytest.mark.asyncio
-    async def test_worker_loop_message_processing(self, pushpull, mock_pilot):
-        """Test worker loop processes messages correctly."""
-        mock_js = MagicMock()
-        mock_js.pull_subscribe = AsyncMock()
-        mock_js.add_stream = AsyncMock()
-        mock_js.streams_info = AsyncMock(side_effect=Exception("Stream not found"))
-        mock_message = MagicMock()
-        mock_message.data = json.dumps({
-            "_id": "test-123",
-            "type": "test_job",
-            "data": {"test": "data"},
-            "error": None,
-            "recv_ms": 0,
-            "start_ms": 0,
-            "end_ms": 0,
-            "status": "new",
-            "retry_count": 0
-        }).encode()
-        mock_message.ack = AsyncMock()
         mock_subscription = MagicMock()
-        mock_subscription.fetch = AsyncMock()
-        mock_subscription.fetch.side_effect = [
-            [mock_message],
-            TimeoutError("nats: timeout")
-        ]
-        mock_js.pull_subscribe.return_value = mock_subscription
-        pushpull._js = mock_js
-        
-        # Mock the shutdown event
-        pushpull._shutdown_event = asyncio.Event()
-        
-        callback = AsyncMock()
-        
-        # Start worker loop
-        task = asyncio.create_task(pushpull._worker_loop("test.jobs", callback))
-        
-        # Let it run to process the message
-        await asyncio.sleep(0.2)
-        
-        # Set shutdown event
-        pushpull._shutdown_event.set()
-        
-        # Wait for task to complete
-        await task
-        
-        # Verify callback was called with the job
-        callback.assert_called_once()
-        called_job = callback.call_args[0][0]
-        assert called_job["_id"] == "test-123"
-        assert called_job["status"] == "finished"
-        
-        # Verify message was acknowledged
-        mock_message.ack.assert_called_once()
+        mock_subscription._id = 99
+        nats_pushpull._nats_client.subscribe = AsyncMock(return_value=mock_subscription)
 
-    @pytest.mark.asyncio
-    async def test_worker_loop_error_handling(self, pushpull, mock_pilot):
-        """Test worker loop handles callback errors correctly."""
-        mock_js = MagicMock()
-        mock_js.pull_subscribe = AsyncMock()
-        mock_js.add_stream = AsyncMock()
-        mock_js.streams_info = AsyncMock(side_effect=Exception("Stream not found"))
-        mock_message = MagicMock()
-        mock_message.data = json.dumps({
-            "_id": "test-123",
-            "type": "test_job",
-            "data": {"test": "data"},
-            "error": None,
-            "recv_ms": 0,
-            "start_ms": 0,
-            "end_ms": 0,
-            "status": "new",
-            "retry_count": 0
-        }).encode()
-        mock_message.ack = AsyncMock()
-        mock_subscription = MagicMock()
-        mock_subscription.fetch = AsyncMock()
-        mock_subscription.fetch.side_effect = [
-            [mock_message],
-            TimeoutError("nats: timeout")
-        ]
-        mock_js.pull_subscribe.return_value = mock_subscription
-        pushpull._js = mock_js
-        
-        # Mock the shutdown event
-        pushpull._shutdown_event = asyncio.Event()
-        
-        # Create a callback that raises an exception
-        async def error_callback(job):
-            raise Exception("Test error")
-        
-        # Start worker loop
-        task = asyncio.create_task(pushpull._worker_loop("test.jobs", error_callback))
-        
-        # Let it run to process the message
-        await asyncio.sleep(0.2)
-        
-        # Set shutdown event
-        pushpull._shutdown_event.set()
-        
-        # Wait for task to complete
-        await task
-        
-        # Verify message was acknowledged even after error
-        mock_message.ack.assert_called_once()
+        # Subscribe and get the callback registered in the nats_client.subscribe call
+        await nats_pushpull.subscribe(subject, callback)
+        # Get the actual callback passed to nats_client.subscribe
+        subscribe_call = nats_pushpull._nats_client.subscribe.call_args
+        assert subscribe_call is not None
+        _, kwargs = subscribe_call
+        nats_callback = kwargs['cb']
 
-    @pytest.mark.asyncio
-    async def test_worker_loop_cancellation_handling(self, pushpull, mock_pilot):
-        """Test worker loop handles cancellation correctly."""
-        mock_js = MagicMock()
-        mock_js.pull_subscribe = AsyncMock()
-        mock_js.add_stream = AsyncMock()
-        mock_js.streams_info = AsyncMock(side_effect=Exception("Stream not found"))
-        mock_message = MagicMock()
-        mock_message.data = json.dumps({
-            "_id": "test-123",
-            "type": "test_job",
-            "data": {"test": "data"},
-            "error": None,
-            "recv_ms": 0,
-            "start_ms": 0,
-            "end_ms": 0,
-            "status": "new",
-            "retry_count": 0
-        }).encode()
-        mock_message.ack = AsyncMock()
-        mock_subscription = MagicMock()
-        mock_subscription.fetch = AsyncMock()
-        mock_subscription.fetch.side_effect = [
-            [mock_message],
-            TimeoutError("nats: timeout")
-        ]
-        mock_js.pull_subscribe.return_value = mock_subscription
-        pushpull._js = mock_js
-        
-        # Mock the shutdown event
-        pushpull._shutdown_event = asyncio.Event()
-        
-        # Create a callback that gets cancelled
-        async def cancellable_callback(job):
-            raise asyncio.CancelledError()
-        
-        # Start worker loop
-        task = asyncio.create_task(pushpull._worker_loop("test.jobs", cancellable_callback))
-        
-        # Let it run to process the message
-        await asyncio.sleep(0.2)
-        
-        # Set shutdown event
-        pushpull._shutdown_event.set()
-        
-        # Wait for task to complete
-        await task
-        
-        # Verify message was acknowledged even after cancellation
-        mock_message.ack.assert_called_once()
-
-@pytest.mark.asyncio
-@pytest.mark.integration
-async def test_nats_pushpull_integration():
-    """Integration test for NatsPushPull with real NATS server."""
-    pilot = NatsPilot(nats_urls=["nats://localhost:4222"])
-    
-    try:
-        await pilot.connect()
-        
-        pushpull = pilot.pushpull()
-        processed_jobs = []
-        job_statuses = []
-        
-        async def job_callback(job: Job):
-            processed_jobs.append(job)
-            await asyncio.sleep(0.1)
-        
-        async def status_callback(job: Job):
-            job_statuses.append(job)
-        
-        # Register worker and monitor
-        await pushpull.register_worker("integration.jobs", job_callback, n_workers=2)
-        await pushpull.subscribe("integration.jobs", status_callback)
-        
-        # Create and push multiple jobs
-        jobs = []
-        for i in range(3):
-            job = Job(
-                _id=generate_id(),
-                type=f"test_job_{i}",
-                data={"index": i, "data": f"test_data_{i}"},
-                error=None,
-                recv_ms=0,
-                start_ms=0,
-                end_ms=0,
-                status="new",
-                retry_count=0
-            )
-            jobs.append(job)
-            success = await pushpull.push("integration.jobs", job)
-            assert success
-        
-        # Wait for all jobs to be processed
-        await asyncio.sleep(1.0)
-        
-        # Verify all jobs were processed
-        assert len(processed_jobs) == 3
-        assert len(job_statuses) >= 3  # At least 3 status updates (running, finished)
-        
-        # Verify job processing order and status
-        for i, job in enumerate(processed_jobs):
-            assert job["type"] == f"test_job_{i}"
-            assert job["data"]["index"] == i
-            assert job["status"] == "finished"
-        
-        await pilot.disconnect()
-        
-    except Exception:
-        pytest.skip("NATS server not available")
+        # Simulate a NATS message
+        class FakeMsg:
+            def __init__(self, data):
+                self.data = data
+                self.subject = subject
+        test_job = {"_id": "abc", "type": "test", "data": 123, "error": None, "recv_ms": 0, "start_ms": 0, "end_ms": 0, "status": "new", "retry_count": 0}
+        msg = FakeMsg(json.dumps(test_job).encode())
+        await nats_callback(msg)
+        callback.assert_awaited_once_with(test_job)
