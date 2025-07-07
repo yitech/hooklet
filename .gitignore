@@ -59,8 +59,7 @@ data/
 
 # config
 *.json
-*.yaml
-*.yml
+
 
 # pypirc
 .pypirc
