@@ -1,4 +1,3 @@
-import asyncio
 from abc import ABC, abstractmethod
 
 from hooklet.base.node import Node
@@ -13,26 +12,19 @@ class Sinker(Node, ABC):
         super().__init__(name)
         self.subscribes = subscribes
         self.pubsub = pubsub
-        self.queue: asyncio.Queue[Msg] = asyncio.Queue()
+        self.subscription_ids: dict[str, int] = {}
 
-    async def start(self):
-        await super().start()
+    async def on_start(self):
         for subscribe in self.subscribes:
-            self.pubsub.subscribe(subscribe, self.queue.put)
+            subscription_id = await self.pubsub.subscribe(subscribe, self.on_message)
+            self.subscription_ids[subscribe] = subscription_id
 
     @abstractmethod
-    async def sink(self, msg: Msg) -> None:
-        raise NotImplementedError("Subclasses must implement sink()")
+    async def on_message(self, msg: Msg) -> None:
+        raise NotImplementedError("Subclasses must implement on_message()")
 
-    async def run(self):
-        while self.is_running:
-            try:
-                msg = await self.queue.get()
-                await self.sink(msg)
-            except Exception as e:
-                await self.on_error(e)
-
-    async def close(self):
-        await super().close()
+    async def on_close(self):
         for subscribe in self.subscribes:
-            self.pubsub.unsubscribe(subscribe, hash(self.queue.put))
+            if subscribe in self.subscription_ids:
+                await self.pubsub.unsubscribe(subscribe, self.subscription_ids[subscribe])
+        self.subscription_ids.clear()
