@@ -16,7 +16,7 @@ class TestRPCServer:
 
     class MockServer(RPCServer):
         """Concrete implementation of RPCServer for testing."""
-        async def callback(self, req: Req) -> Reply:
+        async def on_request(self, req: Req) -> Reply:
             params = req.get("params", {})
             operation = params.get("operation", "unknown")
             data = params.get("data", {})
@@ -95,7 +95,7 @@ class TestRPCServer:
         }
         
         # Call the callback directly
-        response = await server.callback(test_req)
+        response = await server.on_request(test_req)
         
         assert response["type"] == "reply"
         assert response["result"]["sum"] == 8
@@ -125,7 +125,7 @@ class TestRPCServer:
         
         responses = []
         for req in requests:
-            response = await server.callback(req)
+            response = await server.on_request(req)
             responses.append(response)
         
         assert len(responses) == 2
@@ -151,7 +151,7 @@ class TestRPCServer:
         await server.start()
         
         # Verify that register_callback was called
-        mock_reqreply.register_callback.assert_called_once_with("mock-server", server.callback)
+        mock_reqreply.register_callback.assert_called_once_with("mock-server", server.on_request)
         
         await server.close()
 
@@ -179,7 +179,7 @@ class TestRPCClient:
     def server(self, reqreply):
         """Create a test server for client tests."""
         class MockServer(RPCServer):
-            async def callback(self, req: Req) -> Reply:
+            async def on_request(self, req: Req) -> Reply:
                 params = req.get("params", {})
                 operation = params.get("operation", "unknown")
                 data = params.get("data", {})
@@ -308,7 +308,7 @@ class TestRPCClient:
         response = await client.request("test-subject", test_req)
         
         assert response == mock_response
-        mock_reqreply.request.assert_called_once_with("test-subject", test_req)
+        mock_reqreply.request.assert_called_once_with("test-subject", test_req, 10.0)
 
 
 class TestRPCIntegration:
@@ -329,7 +329,7 @@ class TestRPCIntegration:
 
         # Create a server with custom callback
         class IntegrationServer(RPCServer):
-            async def callback(self, req: Req) -> Reply:
+            async def on_request(self, req: Req) -> Reply:
                 params = req.get("params", {})
                 operation = params.get("operation", "unknown")
                 data = params.get("data", "")
@@ -400,7 +400,7 @@ class TestRPCIntegration:
                 self.request_count = 0
                 self._lock = asyncio.Lock()
 
-            async def callback(self, req: Req) -> Reply:
+            async def on_request(self, req: Req) -> Reply:
                 async with self._lock:
                     self.request_count += 1
                     current_count = self.request_count
@@ -452,7 +452,7 @@ class TestRPCIntegration:
         reqreply = pilot.reqreply()
 
         class ErrorServer(RPCServer):
-            async def callback(self, req: Req) -> Reply:
+            async def on_request(self, req: Req) -> Reply:
                 params = req.get("params", {})
                 should_error = params.get("should_error", False)
 

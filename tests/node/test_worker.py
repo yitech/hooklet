@@ -23,7 +23,7 @@ class TestWorker:
             self.should_fail = False
             self.fail_message = "Test failure"
 
-        async def process(self, job: Job) -> int:
+        async def on_job(self, job: Job) -> int:
             self.processed_jobs.append(job)
             if self.should_fail:
                 raise Exception(self.fail_message)
@@ -65,20 +65,18 @@ class TestWorker:
     async def test_worker_initialization(self, worker, pushpull):
         assert worker.name == "test-worker"
         assert worker.pushpull == pushpull
-        assert not worker.is_running
         assert worker.processed_jobs == []
         assert worker.process_results == []
 
     @pytest.mark.asyncio
     async def test_worker_start(self, worker):
         await worker.start()
-        assert worker.is_running
         # No direct way to check callback registration, but no error means success
         await worker.close()
 
     @pytest.mark.asyncio
     async def test_worker_process_job(self, worker, sample_job):
-        result = await worker.process(sample_job)
+        result = await worker.on_job(sample_job)
         assert result == 0
         assert len(worker.processed_jobs) == 1
         assert worker.processed_jobs[0] == sample_job
@@ -99,7 +97,7 @@ class TestWorker:
             retry_count=0
         ) for i in range(3)]
         for job in jobs:
-            result = await worker.process(job)
+            result = await worker.on_job(job)
             assert result == 0
         assert len(worker.processed_jobs) == 3
         assert len(worker.process_results) == 3
@@ -109,16 +107,14 @@ class TestWorker:
     async def test_worker_process_failure(self, worker, sample_job):
         worker.should_fail = True
         with pytest.raises(Exception, match="Test failure"):
-            await worker.process(sample_job)
+            await worker.on_job(sample_job)
         assert len(worker.processed_jobs) == 1
         assert worker.processed_jobs[0] == sample_job
 
     @pytest.mark.asyncio
     async def test_worker_shutdown(self, worker):
         await worker.start()
-        assert worker.is_running
         await worker.close()
-        assert not worker.is_running
 
     @pytest.mark.asyncio
     async def test_worker_context_manager(self, pushpull):
@@ -129,14 +125,12 @@ class TestWorker:
             async def __aexit__(self, exc_type, exc_value, traceback):
                 await self.close()
         async with ContextWorker("test-worker", pushpull) as worker:
-            assert worker.is_running
-        assert not worker.is_running
+            pass
 
     @pytest.mark.asyncio
     async def test_worker_with_real_pilot(self, pilot):
         worker = self.MockWorker("test-worker", pilot.pushpull())
         await worker.start()
-        assert worker.is_running
         job = Job(
             _id=generate_id(),
             type="test_job",
@@ -148,14 +142,14 @@ class TestWorker:
             status="pending",
             retry_count=0
         )
-        result = await worker.process(job)
+        result = await worker.on_job(job)
         assert result == 0
         await worker.close()
 
     @pytest.mark.asyncio
     async def test_worker_error_handling(self, pushpull):
         class ErrorWorker(self.MockWorker):
-            async def process(self, job: Job) -> int:
+            async def on_job(self, job: Job) -> int:
                 raise ValueError("Processing error")
         
         worker = ErrorWorker("error-worker", pushpull)
@@ -171,15 +165,12 @@ class TestWorker:
             retry_count=0
         )
         with pytest.raises(ValueError, match="Processing error"):
-            await worker.process(job)
+            await worker.on_job(job)
 
     @pytest.mark.asyncio
     async def test_worker_registration_with_pushpull(self, pushpull):
         worker = self.MockWorker("test-worker", pushpull)
         await worker.start()
-        # Test that worker is properly registered with pushpull
-        # This is tested indirectly by checking that start() doesn't raise errors
-        assert worker.is_running
         await worker.close()
 
 
@@ -371,7 +362,7 @@ class TestWorkerIntegration:
         
         start_time = time.time()
         for job in jobs:
-            result = await worker.process(job)
+            result = await worker.on_job(job)
             assert result == 0
         end_time = time.time()
         

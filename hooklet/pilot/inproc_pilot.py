@@ -3,7 +3,7 @@ import time
 from collections import defaultdict
 from typing import Any, Awaitable, Callable, Dict
 
-from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, Req, ReqReply, Reply
+from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, Reply, Req, ReqReply
 from hooklet.logger import get_logger
 
 logger = get_logger(__name__)
@@ -51,10 +51,15 @@ class InprocReqReply(ReqReply):
     def __init__(self) -> None:
         self._callbacks: Dict[str, Callable[[Any], Awaitable[Any]]] = {}
 
-    async def request(self, subject: str, data: Req) -> Any:
+    async def request(self, subject: str, data: Req, timeout: float = 10.0) -> Reply:
         if subject not in self._callbacks:
             raise ValueError(f"No callback registered for {subject}")
-        return await self._callbacks[subject](data)
+        try:
+            return await asyncio.wait_for(self._callbacks[subject](data), timeout=timeout)
+        except asyncio.TimeoutError:
+            return Reply(error="Timeout")
+        except Exception as e:
+            return Reply(error=str(e))
 
     async def register_callback(
         self, subject: str, callback: Callable[[Any], Awaitable[Any]]
@@ -99,7 +104,7 @@ class InprocPushPull(PushPull):
         self._pushpulls.clear()
 
 
-class SimplePushPull(PushPull):
+class SimplePushPull:
     def __init__(self, subject: str, pilot: "InprocPilot") -> None:
         self.subject = subject
         self._job_queue = pilot.get_job_queue(subject)

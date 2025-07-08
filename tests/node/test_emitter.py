@@ -77,7 +77,6 @@ class TestEmitter:
         assert emitter.name == "test-emitter"
         assert emitter.pubsub == pubsub
         assert emitter.router == router
-        assert not emitter.is_running
         assert emitter.emitted_messages == []
         assert emitter.emit_count == 0
     
@@ -88,9 +87,6 @@ class TestEmitter:
         
         # Start the emitter
         await emitter.start()
-        
-        # Check that emitter is running
-        assert emitter.is_running
         
         # Wait a bit for messages to be emitted
         await asyncio.sleep(0.3)
@@ -117,7 +113,7 @@ class TestEmitter:
         # Subscribe to the expected subjects
         for i in range(3):
             subject = f"test.subject.test_data_{i}"
-            pilot.pubsub().subscribe(subject, message_handler)
+            await pilot.pubsub().subscribe(subject, message_handler)
         
         await emitter.start()
         
@@ -141,13 +137,8 @@ class TestEmitter:
         await pilot.connect()
         await emitter.start()
         
-        assert emitter.is_running
-        
         # Shutdown the emitter
         await emitter.close()
-        
-        # Verify emitter is no longer running
-        assert not emitter.is_running
         
         await pilot.disconnect()
     
@@ -214,10 +205,7 @@ class TestEmitter:
         # Should not raise exception, but should handle it gracefully
         await emitter.start()
         await asyncio.sleep(0.1)
-        
-        # Emitter should NOT be running after the error
-        assert not emitter.is_running
-        
+              
         # Should still be able to close without error
         await emitter.close()
         await pilot.disconnect()
@@ -272,7 +260,8 @@ class TestEmitter:
         async def message_handler(msg):
             received_messages.append(msg)
         
-        pilot.pubsub().subscribe("custom.test", message_handler)
+        await pilot.pubsub().subscribe("custom.test", message_handler)
+        await pilot.pubsub().publish("test-emitter", {"type": "test_message", "data": "test_data"})
         
         await emitter.start()
         await asyncio.sleep(0.3)
@@ -328,8 +317,8 @@ class TestEmitterIntegration:
             subscriber2_messages.append(msg)
         
         # Subscribe to subjects
-        pilot.pubsub().subscribe("integration.subject.data_0", subscriber1_handler)
-        pilot.pubsub().subscribe("integration.subject.data_1", subscriber2_handler)
+        await pilot.pubsub().subscribe("integration.subject.data_0", subscriber1_handler)
+        await pilot.pubsub().subscribe("integration.subject.data_1", subscriber2_handler)
         
         # Start emitter
         await emitter.start()

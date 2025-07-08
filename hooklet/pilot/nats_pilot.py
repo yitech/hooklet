@@ -9,7 +9,7 @@ from nats.aio.msg import Msg as NatsMsg
 from nats.aio.subscription import Subscription
 from nats.js import JetStreamContext
 
-from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, Req, ReqReply, Reply
+from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, Reply, Req, ReqReply
 from hooklet.logger import get_logger
 
 logger = get_logger(__name__)
@@ -139,13 +139,18 @@ class NatsReqReply(ReqReply):
 
 
 class NatsPushPull(PushPull):
-    def __init__(self, pilot: "NatsPilot") -> None:
+    def __init__(self, pilot: "NatsPilot", js_context) -> None:
         self._pilot = pilot
         self._nats_client = self._pilot._nats_client
-        self._js: JetStreamContext = self._nats_client.jetstream()
+        self._js: JetStreamContext = js_context
         self._workers: list[asyncio.Task] = []
         self._nats_subscriptions: Dict[str, list[Subscription]] = {}
         self._shutdown_event = asyncio.Event()
+
+    @classmethod
+    async def create(cls, pilot: "NatsPilot"):
+        js_context = pilot._nats_client.jetstream()
+        return cls(pilot, js_context)
 
     @lru_cache(maxsize=1000)
     def stream_name(self, subject: str) -> str:
@@ -167,7 +172,7 @@ class NatsPushPull(PushPull):
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
         try:
-            await self._js.streams_info(self.stream_name(subject))
+            await self._js.stream_info(self.stream_name(subject))
             logger.info(f"📦 Stream '{self.stream_name(subject)}' already exists")
             return
         except Exception:
@@ -194,7 +199,7 @@ class NatsPushPull(PushPull):
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
         try:
-            await self._js.consumers_info(self.stream_name(subject), self.consumer_name(subject))
+            await self._js.consumer_info(self.stream_name(subject), self.consumer_name(subject))
             logger.info(f"📦 Consumer '{self.consumer_name(subject)}' already exists")
             return
         except Exception:
@@ -391,7 +396,7 @@ class NatsPushPull(PushPull):
 
 
 class NatsPilot(Pilot):
-    def __init__(self, nats_urls: list[str]|None = None, **kwargs) -> None:
+    def __init__(self, nats_urls: list[str] | None = None, **kwargs) -> None:
         super().__init__()
         if nats_urls is None:
             nats_urls = ["nats://localhost:4222"]
@@ -400,7 +405,7 @@ class NatsPilot(Pilot):
         self._connected = False
         self._pubsub = NatsPubSub(self)
         self._reqreply = NatsReqReply(self)
-        self._pushpull = NatsPushPull(self)
+        self._pushpull = None  # Will be set after connect
         self._kwargs = kwargs
 
     def is_connected(self) -> bool:
@@ -411,15 +416,17 @@ class NatsPilot(Pilot):
             await self._nats_client.connect(servers=self._nats_urls, **self._kwargs)
             self._connected = True
             logger.info(f"NatsPilot connected to {self._nats_urls}")
+            self._pushpull = await NatsPushPull.create(self)
         except Exception as e:
-            logger.error(f"Failed to connect to NATS at {self._nats_url}: {e}", exc_info=True)
+            logger.error(f"Failed to connect to NATS at {self._nats_urls}: {e}", exc_info=True)
             raise
 
     async def disconnect(self) -> None:
         try:
             await self._pubsub._cleanup()
             await self._reqreply._cleanup()
-            await self._pushpull._cleanup()
+            if self._pushpull is not None:
+                await self._pushpull._cleanup()
             await self._nats_client.close()
             self._connected = False
             logger.info("NatsPilot disconnected")
@@ -434,4 +441,6 @@ class NatsPilot(Pilot):
         return self._reqreply
 
     def pushpull(self) -> NatsPushPull:
+        if self._pushpull is None:
+            raise RuntimeError("NatsPushPull is not initialized. Call connect() first.")
         return self._pushpull

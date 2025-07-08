@@ -1,3 +1,4 @@
+import asyncio
 from abc import ABC, abstractmethod
 from contextlib import aclosing
 from typing import AsyncGenerator, Callable
@@ -15,6 +16,9 @@ class Emitter(Node, ABC):
         self.pubsub = pubsub
         self.router = router
 
+        self.task: asyncio.Task | None = None
+        self.shutdown_event = asyncio.Event()
+
     @abstractmethod
     async def emit(self) -> AsyncGenerator[Msg, None]:
         """
@@ -22,11 +26,29 @@ class Emitter(Node, ABC):
         """
         raise NotImplementedError("Subclasses must implement emit()")
 
+    async def on_start(self):
+        if self.task is not None:
+            self.task.cancel()
+            await self.task
+        self.shutdown_event.clear()
+
+        self.task = asyncio.create_task(self.run())
+
+    async def on_close(self):
+        self.shutdown_event.set()
+        try:
+            await asyncio.wait_for(self.task, timeout=2)
+        except asyncio.TimeoutError:
+            self.task.cancel()
+            await self.task
+        finally:
+            self.task = None
+
     async def run(self):
         try:
             async with aclosing(self.emit()) as gen:
                 async for msg in gen:
-                    if not self.is_running:
+                    if self.shutdown_event.is_set():
                         break
                     subject = self.router(msg)
                     await self.pubsub.publish(subject, msg)

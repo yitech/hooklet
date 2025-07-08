@@ -20,7 +20,7 @@ from hooklet.base.types import Req, Reply
 class ArithmeticServer(RPCServer):
     """RPC Server that handles arithmetic operations"""
     
-    async def callback(self, req: Req) -> Reply:
+    async def on_request(self, req: Req) -> Reply:
         """Handle arithmetic operation requests"""
         start_ms = int(time.time() * 1000)
         
@@ -154,7 +154,7 @@ async def run_demo():
     
     # Create server and client
     server = ArithmeticServer("arithmetic-server", pilot.reqreply())
-    client = ArithmeticClient("arithmetic-client", pilot.reqreply())
+    client = ArithmeticClient(pilot.reqreply())
     
     # Start server
     await server.start()
