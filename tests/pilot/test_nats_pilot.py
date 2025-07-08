@@ -241,4 +241,140 @@ class TestNatsPilot:
 class TestNatsPushPull:
     """Test cases for NatsPushPull class."""
 
-    
+    @pytest.fixture
+    def mock_pilot(self):
+        """Create a mock NatsPilot instance."""
+        pilot = MagicMock()
+        pilot.is_connected.return_value = True
+        pilot._nats_client = AsyncMock()
+        return pilot
+
+    @pytest.fixture
+    def mock_js_context(self):
+        """Create a mock JetStream context."""
+        js_context = AsyncMock()
+        js_context.stream_info = AsyncMock()
+        js_context.consumer_info = AsyncMock()
+        js_context.add_stream = AsyncMock()
+        js_context.publish = AsyncMock()
+        js_context.pull_subscribe = AsyncMock()
+        return js_context
+
+    @pytest.fixture
+    def sample_job(self):
+        """Create a sample job for testing."""
+        return Job(
+            _id=generate_id(),
+            type="test_job",
+            data={"test": "data"},
+            error=None,
+            recv_ms=int(time.time() * 1000),
+            start_ms=0,
+            end_ms=0,
+            status="new",
+            retry_count=0
+        )
+
+    @pytest.mark.asyncio
+    async def test_init(self, mock_pilot, mock_js_context):
+        """Test NatsPushPull initialization."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        assert pushpull._pilot == mock_pilot
+        assert pushpull._js == mock_js_context
+        assert pushpull._nats_client == mock_pilot._nats_client
+        assert pushpull._workers == []
+        assert pushpull._nats_subscriptions == {}
+        assert pushpull._shutdown_event is not None
+        assert not pushpull._shutdown_event.is_set()
+
+    def test_stream_name_generation(self, mock_pilot, mock_js_context):
+        """Test stream name generation method."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Test normal subject
+        assert pushpull.stream_name("test.subject") == "TEST-SUBJECT"
+        
+        # Test subject with multiple dots
+        assert pushpull.stream_name("app.module.service") == "APP-MODULE-SERVICE"
+        
+        # Test single word subject
+        assert pushpull.stream_name("jobs") == "JOBS"
+        
+        # Test that the method uses caching (same object returned)
+        stream_name1 = pushpull.stream_name("test.cache")
+        stream_name2 = pushpull.stream_name("test.cache")
+        assert stream_name1 == stream_name2
+
+    def test_consumer_name_generation(self, mock_pilot, mock_js_context):
+        """Test consumer name generation method."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Test normal subject
+        assert pushpull.consumer_name("test.subject") == "worker-test-subject"
+        
+        # Test subject with multiple dots
+        assert pushpull.consumer_name("app.module.service") == "worker-app-module-service"
+        
+        # Test single word subject
+        assert pushpull.consumer_name("jobs") == "worker-jobs"
+
+    def test_subject_name_generation(self, mock_pilot, mock_js_context):
+        """Test subscriber and job subject name generation methods."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Test subscriber subject
+        assert pushpull.subscriber_subject("test.subject") == "test.subject.subscriber"
+        
+        # Test job subject
+        assert pushpull.job_subject("test.subject") == "test.subject.job"
+
+    @pytest.mark.asyncio
+    async def test_ensure_stream_existing_stream(self, mock_pilot, mock_js_context):
+        """Test _ensure_stream when stream already exists."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock stream_info to return successfully (stream exists)
+        mock_js_context.stream_info.return_value = {"name": "TEST-SUBJECT"}
+        
+        # Should not raise an exception
+        await pushpull._ensure_stream("test.subject")
+        
+        # Verify stream_info was called with correct stream name
+        mock_js_context.stream_info.assert_called_once_with("TEST-SUBJECT")
+        
+        # Verify add_stream was not called since stream exists
+        mock_js_context.add_stream.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ensure_stream_create_new_stream(self, mock_pilot, mock_js_context):
+        """Test _ensure_stream when stream doesn't exist."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock stream_info to raise exception (stream doesn't exist)
+        mock_js_context.stream_info.side_effect = Exception("Stream not found")
+        
+        # Should not raise an exception
+        await pushpull._ensure_stream("test.subject")
+        
+        # Verify stream_info was called
+        mock_js_context.stream_info.assert_called_once_with("TEST-SUBJECT")
+        
+        # Verify add_stream was called with correct parameters
+        mock_js_context.add_stream.assert_called_once()
+        call_args = mock_js_context.add_stream.call_args
+        assert call_args[1]["name"] == "TEST-SUBJECT"
+        assert call_args[1]["subjects"] == ["test.subject.>"]
+        assert call_args[1]["retention"] == "workqueue"
+
+    @pytest.mark.asyncio
+    async def test_ensure_stream_not_connected(self, mock_pilot, mock_js_context):
+        """Test _ensure_stream when pilot is not connected."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock pilot as not connected
+        mock_pilot.is_connected.return_value = False
+        
+        # Should raise RuntimeError
+        with pytest.raises(RuntimeError, match="NATS client not connected"):
+            await pushpull._ensure_stream("test.subject") 
