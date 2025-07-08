@@ -25,11 +25,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-# 
-      # - name: Wait for NATS to be ready
-      #   run: |
-      #     docker run -d --name nats -p 4222:4222 -p 8222:8222 nats:latest -js
-# 
+
+      - name: Wait for NATS to be ready
+        run: |
+          docker run -d --name nats -p 4222:4222 -p 8222:8222 nats:latest -js
+
       # - name: Run mypy
       #   run: |
       #     mypy --ignore-missing-imports --check-untyped-defs hooklet
