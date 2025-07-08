@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hooklet"
 description = "An asynchronous, event-driven Python framework using NATS messaging system"
-version = "0.5.2"
+version = "0.5.3"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
