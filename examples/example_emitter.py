@@ -9,7 +9,7 @@ emits random positive numbers and uniform(0,1) values every second.
 import asyncio
 import random
 import time
-from typing import Any, Dict
+from typing import Any, Dict, AsyncGenerator
 
 from hooklet.node.emitter import Emitter
 from hooklet.pilot.inproc_pilot import InprocPilot
@@ -25,9 +25,9 @@ class RandomNumberEmitter(Emitter):
         super().__init__(name, pubsub, router)
         self.emit_count = 0
     
-    async def emit(self):
+    async def emit(self) -> AsyncGenerator[Msg, None]:
         """Emit random numbers every second"""
-        while self.is_running:
+        while not self.shutdown_event.is_set():
             # Generate random positive integer
             random_int = random.randint(1, 1000)
             
@@ -78,12 +78,12 @@ class NumberSubscriber:
             print(f"   Emit Count: {data.get('emit_count')}")
             print()
         
-        self.subscription_id = self.pubsub.subscribe("random_numbers", message_handler)
+        self.subscription_id = await self.pubsub.subscribe("random_numbers", message_handler)
     
     async def stop(self):
         """Stop listening for messages"""
         if hasattr(self, 'subscription_id'):
-            self.pubsub.unsubscribe("random_numbers", self.subscription_id)
+            await self.pubsub.unsubscribe("random_numbers", self.subscription_id)
         print(f"🛑 {self.name} stopped listening")
 
 
