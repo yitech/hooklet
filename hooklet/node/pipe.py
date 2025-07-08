@@ -16,33 +16,25 @@ class Pipe(Node, ABC):
         self.subscribes = subscribes
         self.pubsub = pubsub
         self.router = router
-        self.queue: asyncio.Queue[Msg] = asyncio.Queue()
+        self.subscriber_id = None
 
-    async def start(self):
-        await super().start()
+    async def on_start(self):
+        async def on_pipe_message(in_msg: Msg):
+            async with aclosing(self.on_message(in_msg)) as gen:
+                try:
+                    async for out_msg in gen:
+                        subject = self.router(out_msg)
+                        await self.pubsub.publish(subject, out_msg)
+                except Exception as e:
+                    await self.on_error(e)
+        self.subscriber_id = id(on_pipe_message)
         for subscribe in self.subscribes:
-            self.pubsub.subscribe(subscribe, self.queue.put)
+            self.pubsub.subscribe(subscribe, on_pipe_message)
 
     @abstractmethod
-    async def pipe(self, msg: Msg) -> AsyncGenerator[Msg, None]:
-        raise NotImplementedError("Subclasses must implement pipe()")
+    async def on_message(self, msg: Msg) -> AsyncGenerator[Msg, None]:
+        raise NotImplementedError("Subclasses must implement on_message()")
 
-    async def run(self):
-        while self.is_running:
-            try:
-                msg = await asyncio.wait_for(self.queue.get(), timeout=2)
-                async with aclosing(self.pipe(msg)) as gen:
-                    async for msg in gen:
-                        if not self.is_running:
-                            break
-                        subject = self.router(msg)
-                        await self.pubsub.publish(subject, msg)
-            except asyncio.TimeoutError:
-                pass
-            except Exception as e:
-                await self.on_error(e)
-
-    async def close(self):
-        await super().close()
+    async def on_close(self):
         for subscribe in self.subscribes:
-            self.pubsub.unsubscribe(subscribe, hash(self.queue.put))
+            self.pubsub.unsubscribe(subscribe, self.subscriber_id)
