@@ -1,4 +1,3 @@
-import asyncio
 from abc import ABC, abstractmethod
 
 from hooklet.base.node import Node
@@ -21,7 +20,7 @@ class RPCServer(Node, ABC):
         handling and return the Reply with error.
         """
         raise NotImplementedError("Subclasses must implement callback()")
-    
+
     async def on_close(self):
         await self.reqreply.unregister_callback(self.name)
 

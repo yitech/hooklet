@@ -25,6 +25,7 @@ class Worker(Node, ABC):
     async def on_close(self):
         pass
 
+
 class Dispatcher:
     def __init__(self, pushpull: PushPull):
         self.pushpull = pushpull

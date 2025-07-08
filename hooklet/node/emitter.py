@@ -1,6 +1,6 @@
+import asyncio
 from abc import ABC, abstractmethod
 from contextlib import aclosing
-import asyncio
 from typing import AsyncGenerator, Callable
 
 from hooklet.base.node import Node
@@ -25,13 +25,13 @@ class Emitter(Node, ABC):
         Use is_running to stop the emit.
         """
         raise NotImplementedError("Subclasses must implement emit()")
-    
+
     async def on_start(self):
         if self.task is not None:
             self.task.cancel()
             await self.task
         self.shutdown_event.clear()
-        
+
         self.task = asyncio.create_task(self.run())
 
     async def on_close(self):

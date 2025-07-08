@@ -26,6 +26,7 @@ class Pipe(Node, ABC):
                         await self.pubsub.publish(subject, out_msg)
                 except Exception as e:
                     await self.on_error(e)
+
         self.subscriber_id = id(on_pipe_message)
         for subscribe in self.subscribes:
             await self.pubsub.subscribe(subscribe, on_pipe_message)

@@ -9,7 +9,7 @@ from nats.aio.msg import Msg as NatsMsg
 from nats.aio.subscription import Subscription
 from nats.js import JetStreamContext
 
-from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, Req, ReqReply, Reply
+from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, Reply, Req, ReqReply
 from hooklet.logger import get_logger
 
 logger = get_logger(__name__)
@@ -396,7 +396,7 @@ class NatsPushPull(PushPull):
 
 
 class NatsPilot(Pilot):
-    def __init__(self, nats_urls: list[str]|None = None, **kwargs) -> None:
+    def __init__(self, nats_urls: list[str] | None = None, **kwargs) -> None:
         super().__init__()
         if nats_urls is None:
             nats_urls = ["nats://localhost:4222"]
