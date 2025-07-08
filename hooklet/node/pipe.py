@@ -15,7 +15,7 @@ class Pipe(Node, ABC):
         self.subscribes = subscribes
         self.pubsub = pubsub
         self.router = router
-        self.subscriber_id = None
+        self.subscriber_id: int | None = None
 
     async def on_start(self):
         async def on_pipe_message(in_msg: Msg):
@@ -28,12 +28,14 @@ class Pipe(Node, ABC):
                     await self.on_error(e)
         self.subscriber_id = id(on_pipe_message)
         for subscribe in self.subscribes:
-            self.pubsub.subscribe(subscribe, on_pipe_message)
+            await self.pubsub.subscribe(subscribe, on_pipe_message)
 
     @abstractmethod
     async def on_message(self, msg: Msg) -> AsyncGenerator[Msg, None]:
         raise NotImplementedError("Subclasses must implement on_message()")
 
     async def on_close(self):
+        if self.subscriber_id is None:
+            return
         for subscribe in self.subscribes:
-            self.pubsub.unsubscribe(subscribe, self.subscriber_id)
+            await self.pubsub.unsubscribe(subscribe, self.subscriber_id)
