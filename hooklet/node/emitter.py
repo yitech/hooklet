@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from contextlib import aclosing
+import asyncio
 from typing import AsyncGenerator, Callable
 
 from hooklet.base.node import Node
@@ -15,18 +16,42 @@ class Emitter(Node, ABC):
         self.pubsub = pubsub
         self.router = router
 
+        self.task: asyncio.Task | None = None
+        self.shutdown_event = asyncio.Event()
+
     @abstractmethod
     async def emit(self) -> AsyncGenerator[Msg, None]:
         """
         Use is_running to stop the emit.
         """
         raise NotImplementedError("Subclasses must implement emit()")
+    
+    async def on_start(self):
+        self.shutdown_event.clear()
+        if self.task is not None:
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                # This is expected when cancelling a task
+                pass
+        self.task = asyncio.create_task(self.run())
+
+    async def on_close(self):
+        self.shutdown_event.set()
+        if self.task:
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                # This is expected when cancelling a task
+                pass
 
     async def run(self):
         try:
             async with aclosing(self.emit()) as gen:
                 async for msg in gen:
-                    if not self.is_running:
+                    if self.shutdown_event.is_set():
                         break
                     subject = self.router(msg)
                     await self.pubsub.publish(subject, msg)
