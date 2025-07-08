@@ -27,25 +27,22 @@ class Emitter(Node, ABC):
         raise NotImplementedError("Subclasses must implement emit()")
     
     async def on_start(self):
-        self.shutdown_event.clear()
         if self.task is not None:
             self.task.cancel()
-            try:
-                await self.task
-            except asyncio.CancelledError:
-                # This is expected when cancelling a task
-                pass
+            await self.task
+        self.shutdown_event.clear()
+        
         self.task = asyncio.create_task(self.run())
 
     async def on_close(self):
         self.shutdown_event.set()
-        if self.task:
+        try:
+            await asyncio.wait_for(self.task, timeout=2)
+        except asyncio.TimeoutError:
             self.task.cancel()
-            try:
-                await self.task
-            except asyncio.CancelledError:
-                # This is expected when cancelling a task
-                pass
+            await self.task
+        finally:
+            self.task = None
 
     async def run(self):
         try:
