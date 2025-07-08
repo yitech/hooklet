@@ -1,6 +1,8 @@
 # Hooklet v3
+[![codecov](https://codecov.io/gh/yitech/hooklet/graph/badge.svg?token=3kf2NZNMKe)](https://codecov.io/gh/yitech/hooklet)
 
-Hooklet is an event-driven framework that enables building distributed systems using message broker architecture. The v3 version centralize different data transmission models (pub/sub, req/reply) with respect to different underlying implementations. (e.g. NATS, ZeroMQ, native Python asyncio)
+
+Hooklet is an event-driven framework that enables building distributed systems using message broker architecture. The v3 version centralize different data transmission models (pub/sub, req/reply) with respect to different underlying implementations. (e.g. NATS, ~~ZeroMQ~~, native Python asyncio)
 
 ## Architecture
 
