@@ -33,17 +33,17 @@ jobs:
       # - name: Run mypy
       #   run: |
       #     mypy --ignore-missing-imports --check-untyped-defs hooklet
-# 
+
       # - name: Run flake8
       #   run: |
       #     flake8 hooklet
-# 
-      # - name: Generate Report
-      #   run: |
-      #     pip install pytest httpx pytest-asyncio pytest-cov
-      #     pytest --cov=hooklet --cov-report=xml
-# 
-      # - name: Upload coverage reports to Codecov
-      #   uses: codecov/codecov-action@v5
-      #   with:
-      #       token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Generate Report
+        run: |
+          pip install pytest httpx pytest-asyncio pytest-cov
+          pytest --cov=hooklet --cov-report=xml
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
