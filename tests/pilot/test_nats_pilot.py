@@ -4,6 +4,7 @@ import asyncio
 import time
 import json
 import warnings
+import unittest.mock
 from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
 
@@ -498,4 +499,189 @@ class TestNatsPushPull:
         mock_js_context.add_stream.assert_called_once()
         
         # Verify publish was called
-        mock_js_context.publish.assert_called_once() 
+        mock_js_context.publish.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_subscribe_successful(self, mock_pilot, mock_js_context):
+        """Test subscribe method with successful subscription."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock NATS client subscribe
+        mock_subscription = MagicMock()
+        mock_subscription._id = 123
+        mock_pilot._nats_client.subscribe.return_value = mock_subscription
+        
+        # Create a test callback
+        async def test_callback(job):
+            pass
+        
+        # Test successful subscription
+        subscription_id = await pushpull.subscribe("test.subject", test_callback)
+        
+        # Verify result
+        assert subscription_id == 123
+        
+        # Verify subscribe was called with correct parameters
+        mock_pilot._nats_client.subscribe.assert_called_once_with(
+            "test.subject.subscriber", 
+            cb=unittest.mock.ANY
+        )
+        
+        # Verify subscription was stored
+        assert "test.subject.subscriber" in pushpull._nats_subscriptions
+        assert mock_subscription in pushpull._nats_subscriptions["test.subject.subscriber"]
+
+    @pytest.mark.asyncio
+    async def test_unsubscribe_successful(self, mock_pilot, mock_js_context):
+        """Test unsubscribe method with successful unsubscription."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock subscription
+        mock_subscription = MagicMock()
+        mock_subscription._id = 123
+        mock_subscription.unsubscribe = AsyncMock()
+        
+        # Set up initial subscription state
+        pushpull._nats_subscriptions["test.subject.subscriber"] = [mock_subscription]
+        
+        # Test successful unsubscription
+        result = await pushpull.unsubscribe("test.subject", 123)
+        
+        # Verify result
+        assert result is True
+        
+        # Verify unsubscribe was called
+        mock_subscription.unsubscribe.assert_called_once()
+        
+        # Verify subscription was removed from the list
+        assert pushpull._nats_subscriptions["test.subject.subscriber"] == []
+
+    @pytest.mark.asyncio
+    async def test_unsubscribe_not_found(self, mock_pilot, mock_js_context):
+        """Test unsubscribe method when subscription is not found."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Test unsubscription with non-existent subscription
+        result = await pushpull.unsubscribe("test.subject", 999)
+        
+        # Verify result
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_unsubscribe_wrong_id(self, mock_pilot, mock_js_context):
+        """Test unsubscribe method with wrong subscription ID."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock subscription with different ID
+        mock_subscription = MagicMock()
+        mock_subscription._id = 123
+        
+        # Set up initial subscription state
+        pushpull._nats_subscriptions["test.subject.subscriber"] = [mock_subscription]
+        
+        # Test unsubscription with wrong ID
+        result = await pushpull.unsubscribe("test.subject", 456)
+        
+        # Verify result
+        assert result is False
+        
+        # Verify subscription was not removed
+        assert "test.subject.subscriber" in pushpull._nats_subscriptions
+
+    @pytest.mark.asyncio
+    async def test_notify_subscriptions_with_subscriptions(self, mock_pilot, mock_js_context, sample_job):
+        """Test _notify_subscriptions method when subscriptions exist."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock subscription
+        mock_subscription = MagicMock()
+        pushpull._nats_subscriptions["test.subject.subscriber"] = [mock_subscription]
+        
+        # Test notification
+        await pushpull._notify_subscriptions("test.subject", sample_job)
+        
+        # Verify publish was called with correct parameters
+        mock_pilot._nats_client.publish.assert_called_once_with(
+            "test.subject.subscriber",
+            json.dumps(sample_job).encode()
+        )
+
+    @pytest.mark.asyncio
+    async def test_notify_subscriptions_no_subscriptions(self, mock_pilot, mock_js_context, sample_job):
+        """Test _notify_subscriptions method when no subscriptions exist."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Test notification with no subscriptions
+        await pushpull._notify_subscriptions("test.subject", sample_job)
+        
+        # Verify publish was not called
+        mock_pilot._nats_client.publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_notify_subscriptions_empty_list(self, mock_pilot, mock_js_context, sample_job):
+        """Test _notify_subscriptions method when subscription list is empty."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Set up empty subscription list
+        pushpull._nats_subscriptions["test.subject.subscriber"] = []
+        
+        # Test notification
+        await pushpull._notify_subscriptions("test.subject", sample_job)
+        
+        # Verify publish was still called (implementation publishes regardless of empty list)
+        mock_pilot._nats_client.publish.assert_called_once_with(
+            "test.subject.subscriber",
+            json.dumps(sample_job).encode()
+        )
+
+    @pytest.mark.asyncio
+    async def test_cleanup(self, mock_pilot, mock_js_context):
+        """Test _cleanup method properly cleans up resources."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Create mock worker tasks using asyncio.create_task with dummy coroutines
+        async def dummy_worker():
+            return "done"
+        
+        mock_task1 = asyncio.create_task(dummy_worker())
+        mock_task2 = asyncio.create_task(dummy_worker())
+        
+        # Create mock subscriptions
+        mock_sub1 = AsyncMock()
+        mock_sub2 = AsyncMock()
+        
+        # Set up initial state
+        pushpull._workers = [mock_task1, mock_task2]
+        pushpull._nats_subscriptions = {
+            "test.subject1.subscriber": [mock_sub1],
+            "test.subject2.subscriber": [mock_sub2]
+        }
+        
+        # Test cleanup
+        await pushpull._cleanup()
+        
+        # Verify shutdown event was set
+        assert pushpull._shutdown_event.is_set()
+        
+        # Verify all subscriptions were unsubscribed
+        mock_sub1.unsubscribe.assert_called_once()
+        mock_sub2.unsubscribe.assert_called_once()
+        
+        # Verify collections were cleared
+        assert len(pushpull._workers) == 0
+        assert len(pushpull._nats_subscriptions) == 0
+
+    @pytest.mark.asyncio
+    async def test_cleanup_empty_state(self, mock_pilot, mock_js_context):
+        """Test _cleanup method with empty initial state."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Test cleanup with empty state
+        await pushpull._cleanup()
+        
+        # Verify shutdown event was set
+        assert pushpull._shutdown_event.is_set()
+        
+        # Verify collections remain empty
+        assert len(pushpull._workers) == 0
+        assert len(pushpull._nats_subscriptions) == 0 
