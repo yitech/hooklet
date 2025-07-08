@@ -1,4 +1,3 @@
-import asyncio
 from abc import ABC, abstractmethod
 from contextlib import aclosing
 from typing import AsyncGenerator, Callable
