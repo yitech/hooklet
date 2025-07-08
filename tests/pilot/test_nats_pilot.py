@@ -223,8 +223,8 @@ class TestNatsPilot:
             mock_nats_client.connect = AsyncMock()
             mock_nats_client.close = AsyncMock()
             mock_nats_client.is_connected = True
-            mock_nats_client.jetstream = MagicMock()
-            mock_nats_client.jetstream.return_value = MagicMock(name="js_context")
+            mock_nats_client.jetstream = AsyncMock(return_value=MagicMock(name="js_context"))
+
             mock_nats_class.return_value = mock_nats_client
 
             pilot = NatsPilot(["nats://localhost:4222"])
