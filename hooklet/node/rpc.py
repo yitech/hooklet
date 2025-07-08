@@ -11,20 +11,19 @@ class RPCServer(Node, ABC):
         super().__init__(name)
         self.reqreply = reqreply
 
-    async def start(self):
-        await super().start()
-        await self.reqreply.register_callback(self.name, self.callback)
+    async def on_start(self):
+        await self.reqreply.register_callback(self.name, self.on_request)
 
     @abstractmethod
-    async def callback(self, req: Req) -> Reply:
+    async def on_request(self, req: Req) -> Reply:
         """
         The ReqReply require developer to implement the callback, including the error
         handling and return the Reply with error.
         """
         raise NotImplementedError("Subclasses must implement callback()")
-
-    async def run(self):
-        await self.shutdown_event.wait()
+    
+    async def on_close(self):
+        await self.reqreply.unregister_callback(self.name)
 
 
 class RPCClient:
