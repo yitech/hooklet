@@ -377,4 +377,125 @@ class TestNatsPushPull:
         
         # Should raise RuntimeError
         with pytest.raises(RuntimeError, match="NATS client not connected"):
-            await pushpull._ensure_stream("test.subject") 
+            await pushpull._ensure_stream("test.subject")
+
+    @pytest.mark.asyncio
+    async def test_ensure_consumer_existing_consumer(self, mock_pilot, mock_js_context):
+        """Test _ensure_consumer when consumer already exists."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock consumer_info to return successfully (consumer exists)
+        mock_js_context.consumer_info.return_value = {"name": "worker-test-subject"}
+        
+        # Should not raise an exception
+        await pushpull._ensure_consumer("test.subject")
+        
+        # Verify consumer_info was called with correct parameters
+        mock_js_context.consumer_info.assert_called_once_with("TEST-SUBJECT", "worker-test-subject")
+
+    @pytest.mark.asyncio
+    async def test_ensure_consumer_create_new_consumer(self, mock_pilot, mock_js_context):
+        """Test _ensure_consumer when consumer doesn't exist."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock consumer_info to raise exception (consumer doesn't exist)
+        mock_js_context.consumer_info.side_effect = Exception("Consumer not found")
+        
+        # Should not raise an exception
+        await pushpull._ensure_consumer("test.subject")
+        
+        # Verify consumer_info was called
+        mock_js_context.consumer_info.assert_called_once_with("TEST-SUBJECT", "worker-test-subject")
+
+    @pytest.mark.asyncio
+    async def test_ensure_consumer_not_connected(self, mock_pilot, mock_js_context):
+        """Test _ensure_consumer when pilot is not connected."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock pilot as not connected
+        mock_pilot.is_connected.return_value = False
+        
+        # Should raise RuntimeError
+        with pytest.raises(RuntimeError, match="NATS client not connected"):
+            await pushpull._ensure_consumer("test.subject")
+
+    @pytest.mark.asyncio
+    async def test_push_successful(self, mock_pilot, mock_js_context, sample_job):
+        """Test push method with successful job submission."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock stream_info to return successfully (stream exists)
+        mock_js_context.stream_info.return_value = {"name": "TEST-SUBJECT"}
+        
+        # Mock publish to return an acknowledgment
+        mock_ack = MagicMock()
+        mock_ack.seq = 12345
+        mock_js_context.publish.return_value = mock_ack
+        
+        # Test successful push
+        result = await pushpull.push("test.subject", sample_job)
+        
+        # Verify result
+        assert result is True
+        
+        # Verify _ensure_stream was called
+        mock_js_context.stream_info.assert_called_once_with("TEST-SUBJECT")
+        
+        # Verify publish was called with correct parameters
+        mock_js_context.publish.assert_called_once_with(
+            "test.subject.job", 
+            json.dumps(sample_job).encode()
+        )
+        
+        # Verify job was updated with recv_ms and status
+        assert sample_job["status"] == "new"
+        assert sample_job["recv_ms"] > 0
+
+    @pytest.mark.asyncio
+    async def test_push_failure(self, mock_pilot, mock_js_context, sample_job):
+        """Test push method when publishing fails."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock stream_info to return successfully (stream exists)
+        mock_js_context.stream_info.return_value = {"name": "TEST-SUBJECT"}
+        
+        # Mock publish to raise an exception
+        mock_js_context.publish.side_effect = Exception("Publish failed")
+        
+        # Test failed push
+        result = await pushpull.push("test.subject", sample_job)
+        
+        # Verify result
+        assert result is False
+        
+        # Verify _ensure_stream was called
+        mock_js_context.stream_info.assert_called_once_with("TEST-SUBJECT")
+        
+        # Verify publish was called
+        mock_js_context.publish.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_push_stream_creation(self, mock_pilot, mock_js_context, sample_job):
+        """Test push method when stream needs to be created."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+        
+        # Mock stream_info to raise exception first time (stream doesn't exist)
+        mock_js_context.stream_info.side_effect = Exception("Stream not found")
+        
+        # Mock publish to return an acknowledgment
+        mock_ack = MagicMock()
+        mock_ack.seq = 12345
+        mock_js_context.publish.return_value = mock_ack
+        
+        # Test push with stream creation
+        result = await pushpull.push("test.subject", sample_job)
+        
+        # Verify result
+        assert result is True
+        
+        # Verify _ensure_stream was called (stream_info called, then add_stream called)
+        mock_js_context.stream_info.assert_called_once_with("TEST-SUBJECT")
+        mock_js_context.add_stream.assert_called_once()
+        
+        # Verify publish was called
+        mock_js_context.publish.assert_called_once() 
