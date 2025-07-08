@@ -63,3 +63,7 @@ data/
 
 # pypirc
 .pypirc
+
+# coverage
+.coverage
+coverage.xml

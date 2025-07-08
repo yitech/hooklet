@@ -104,7 +104,7 @@ class InprocPushPull(PushPull):
         self._pushpulls.clear()
 
 
-class SimplePushPull(PushPull):
+class SimplePushPull:
     def __init__(self, subject: str, pilot: "InprocPilot") -> None:
         self.subject = subject
         self._job_queue = pilot.get_job_queue(subject)
