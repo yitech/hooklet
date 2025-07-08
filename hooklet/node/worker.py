@@ -12,23 +12,18 @@ class Worker(Node, ABC):
         self.pushpull = pushpull
 
     @abstractmethod
-    async def process(self, job: Job) -> int:
+    async def on_job(self, job: Job) -> int:
         """
         Process the job and return the result.
         Return 0 if the job is processed successfully, Other values are reserved for future use.
         """
         raise NotImplementedError("Subclasses must implement process()")
 
-    async def start(self):
-        await super().start()
-        await self.pushpull.register_worker(self.name, self.process)
+    async def on_start(self):
+        await self.pushpull.register_worker(self.name, self.on_job)
 
-    async def run(self):
-        await self.shutdown_event.wait()
-
-    async def on_finish(self):
-        await super().on_finish()
-
+    async def on_close(self):
+        pass
 
 class Dispatcher:
     def __init__(self, pushpull: PushPull):
