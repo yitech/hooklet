@@ -24,7 +24,7 @@ class NatsPubSub(PubSub):
     async def publish(self, subject: str, msg: Msg) -> None:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
-        payload = json.dumps(msg).encode()
+        payload = json.dumps(msg.model_dump(by_alias=True)).encode()
         await self._pilot._nats_client.publish(subject, payload)
         logger.debug(f"Published to {subject}: {msg}")
 
@@ -92,7 +92,7 @@ class NatsReqReply(ReqReply):
     async def request(self, subject: str, req: Req, timeout: float = 10.0) -> Reply:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
-        payload = json.dumps(req).encode()
+        payload = json.dumps(req.model_dump(by_alias=True)).encode()
         try:
             response = await self._pilot._nats_client.request(subject, payload, timeout=timeout)
             return json.loads(response.data.decode())
@@ -111,7 +111,9 @@ class NatsReqReply(ReqReply):
             try:
                 data = json.loads(msg.data.decode())
                 response = await callback(data)
-                response_payload = json.dumps(response).encode()
+                # Handle both Pydantic models and dictionaries
+                response_payload = json.dumps(response.model_dump(by_alias=True)).encode()
+
                 await msg.respond(response_payload)
             except Exception as e:
                 logger.error(f"Error in NATS request callback for {subject}: {e}", exc_info=True)
@@ -211,22 +213,18 @@ class NatsPushPull(PushPull):
         try:
             await self._ensure_stream(subject)
             # Update job metadata
-            job.update(
-                {
-                    "recv_ms": int(time.time() * 1000),
-                    "status": "new",
-                }
-            )
+            job.recv_ms = int(time.time() * 1000)
+            job.status = "new"
 
             # Publish job to JetStream
-            payload = json.dumps(job).encode()
+            payload = json.dumps(job.model_dump(by_alias=True)).encode()
             ack = await self._js.publish(self.job_subject(subject), payload)
 
             # Notify subscriptions
             # await self._notify_subscriptions(subject, job)
 
             logger.info(
-                f"Pushed job {job['_id']} to {self.job_subject(subject)}, sequence: {ack.seq}"
+                f"Pushed job {job.id} to {self.job_subject(subject)}, sequence: {ack.seq}"
             )
             return True
 
@@ -287,39 +285,24 @@ class NatsPushPull(PushPull):
                         logger.error(f"Error fetching messages for {subject}: {e}", exc_info=True)
                         continue
                     for message in messages:
-                        job = json.loads(message.data.decode())
+                        job_data = json.loads(message.data.decode())
+                        job = Job(**job_data)
                         try:
-                            job.update(
-                                {
-                                    "start_ms": int(time.time() * 1000),
-                                    "status": "running",
-                                }
-                            )
+                            job.start_ms = int(time.time() * 1000)
+                            job.status = "running"
                             await self._notify_subscriptions(subject, job)
                             await callback(job)
-                            job.update(
-                                {
-                                    "end_ms": int(time.time() * 1000),
-                                    "status": "finished",
-                                }
-                            )
+                            job.end_ms = int(time.time() * 1000)
+                            job.status = "finished"
                             await self._notify_subscriptions(subject, job)
                         except asyncio.CancelledError:
-                            job.update(
-                                {
-                                    "end_ms": int(time.time() * 1000),
-                                    "status": "cancelled",
-                                }
-                            )
+                            job.end_ms = int(time.time() * 1000)
+                            job.status = "cancelled"
                             await self._notify_subscriptions(subject, job)
                         except Exception as e:
                             logger.error(f"Error in worker loop for {subject}: {e}", exc_info=True)
-                            job.update(
-                                {
-                                    "end_ms": int(time.time() * 1000),
-                                    "status": "failed",
-                                }
-                            )
+                            job.end_ms = int(time.time() * 1000)
+                            job.status = "failed"
                             await self._notify_subscriptions(subject, job)
                         finally:
                             await message.ack()
@@ -373,7 +356,7 @@ class NatsPushPull(PushPull):
         if subscription_subject not in self._nats_subscriptions:
             return
 
-        await self._nats_client.publish(subscription_subject, json.dumps(job).encode())
+        await self._nats_client.publish(subscription_subject, json.dumps(job.model_dump(by_alias=True)).encode())
 
     async def _cleanup(self) -> None:
         """Clean up all resources."""

@@ -1,36 +1,38 @@
-from typing import Any, Literal, TypedDict
+from pydantic import BaseModel, Field
+from uuid import uuid4
+from typing import Any, Optional, Literal
 
 
-class Msg(TypedDict):
-    _id: str
+class Msg(BaseModel):
+    id: str = Field(alias="_id", default_factory=lambda: str(uuid4()))
     type: str
     data: Any
-    error: str | None
+    error: Optional[str] = None
 
 
-class Req(TypedDict):
-    _id: str
+class Req(BaseModel):
+    id: str = Field(alias="_id", default_factory=lambda: str(uuid4()))
     type: str
     params: Any
-    error: str | None
+    error: Optional[str] = None
 
 
-class Reply(TypedDict):
-    _id: str
+class Reply(BaseModel):
+    id: str = Field(alias="_id", default_factory=lambda: str(uuid4()))
     type: str
     result: Any
-    error: str | None
+    error: Optional[str] = None
     start_ms: int
     end_ms: int
 
 
-class Job(TypedDict):
-    _id: str
+class Job(BaseModel):
+    id: str = Field(alias="_id", default_factory=lambda: str(uuid4()))
     type: str
     data: Any
-    error: str | None
+    error: Optional[str] = None
     recv_ms: int
     start_ms: int
     end_ms: int
-    status: Literal["new", "running", "finished", "failed", "cancelled"]
+    status: Literal["pending", "new", "running", "finished", "failed", "cancelled"]
     retry_count: int
