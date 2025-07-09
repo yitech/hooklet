@@ -117,12 +117,8 @@ class SimplePushPull:
     async def push(self, job: Job) -> bool:
         if self._job_queue.full():
             return False
-        job.update(
-            {
-                "recv_ms": int(time.time() * 1000),
-                "status": "new",
-            }
-        )
+        job.recv_ms = int(time.time() * 1000)
+        job.status = "new"
         await self._notify_subscriptions(job)
         self._job_queue.put_nowait(job)
         return True
@@ -168,38 +164,22 @@ class SimplePushPull:
             # Get the first (and only) completed task from the done set
             completed_task = next(iter(done))
             job = completed_task.result()
-            job.update(
-                {
-                    "start_ms": int(time.time() * 1000),
-                    "status": "running",
-                }
-            )
+            job.start_ms = int(time.time() * 1000)
+            job.status = "running"
             await self._notify_subscriptions(job)
             try:
                 await callback(job)
-                job.update(
-                    {
-                        "end_ms": int(time.time() * 1000),
-                        "status": "finished",
-                    }
-                )
+                job.end_ms = int(time.time() * 1000)
+                job.status = "finished"
                 await self._notify_subscriptions(job)
             except asyncio.CancelledError:
-                job.update(
-                    {
-                        "end_ms": int(time.time() * 1000),
-                        "status": "cancelled",
-                    }
-                )
+                job.end_ms = int(time.time() * 1000)
+                job.status = "cancelled"
             except Exception as e:
                 logger.error(f"Error in worker loop for {self.subject}: {e}")
-                job.update(
-                    {
-                        "end_ms": int(time.time() * 1000),
-                        "status": "failed",
-                        "error": str(e),
-                    }
-                )
+                job.end_ms = int(time.time() * 1000)
+                job.status = "failed"
+                job.error = str(e)
                 await self._notify_subscriptions(job)
 
         logger.info(f"Worker loop for {self.subject} shutdown")

@@ -363,10 +363,10 @@ class TestSimplePushPull:
     async def test_push_success(self):
         pilot = MockPilot()
         spp = SimplePushPull('test', pilot)
-        job = {'_id': '1'}
+        job = Job(_id='1', type='test', data={}, recv_ms=0, start_ms=0, end_ms=0, status='pending', retry_count=0)
         result = await spp.push(job)
         assert result is True
-        assert job['status'] == 'new'
+        assert job.status == 'new'
         assert not spp._job_queue.empty()
 
     @pytest.mark.asyncio
@@ -374,8 +374,8 @@ class TestSimplePushPull:
         pilot = MockPilot()
         spp = SimplePushPull('test', pilot)
         for i in range(2):
-            await spp.push({'_id': str(i)})
-        result = await spp.push({'_id': 'full'})
+            await spp.push(Job(_id=str(i), type='test', data={}, recv_ms=0, start_ms=0, end_ms=0, status='pending', retry_count=0))
+        result = await spp.push(Job(_id='full', type='test', data={}, recv_ms=0, start_ms=0, end_ms=0, status='pending', retry_count=0))
         assert result is False
 
     @pytest.mark.asyncio
@@ -397,10 +397,10 @@ class TestSimplePushPull:
     async def test_worker_loop_success(self):
         pilot = MockPilot()
         spp = SimplePushPull('test', pilot)
-        job = {'_id': 'w1'}
+        job = Job(_id='w1', type='test', data={}, recv_ms=0, start_ms=0, end_ms=0, status='pending', retry_count=0)
         processed = []
         async def worker(job):
-            processed.append(job['_id'])
+            processed.append(job.id)
         await spp.register_worker(worker, 1)
         await spp.push(job)
         await asyncio.sleep(0.05)
@@ -411,15 +411,15 @@ class TestSimplePushPull:
     async def test_worker_loop_error_and_cancel(self):
         pilot = MockPilot()
         spp = SimplePushPull('test', pilot)
-        job = {'_id': 'err'}
+        job = Job(_id='err', type='test', data={}, recv_ms=0, start_ms=0, end_ms=0, status='pending', retry_count=0)
         async def worker(job):
             raise Exception('fail')
         await spp.register_worker(worker, 1)
         await spp.push(job)
         await asyncio.sleep(0.05)
         # Should mark job as failed
-        assert job['status'] == 'failed'
-        assert job['error'] == 'fail'
+        assert job.status == 'failed'
+        assert job.error == 'fail'
         # Test cancellation
         await spp._cleanup()  # Should cancel the worker loop cleanly
 
@@ -427,7 +427,7 @@ class TestSimplePushPull:
     async def test_notify_subscriptions_error(self):
         pilot = MockPilot()
         spp = SimplePushPull('test', pilot)
-        job = {'_id': 'notify'}
+        job = Job(_id='notify', type='test', data={}, recv_ms=0, start_ms=0, end_ms=0, status='pending', retry_count=0)
         called = []
         async def good_cb(job):
             called.append('good')
@@ -443,7 +443,7 @@ class TestSimplePushPull:
         pilot = MockPilot()
         spp = SimplePushPull('test', pilot)
         await spp.register_worker(lambda x: None, 2)
-        await spp.push({'_id': 'test'})
+        await spp.push(Job(_id='test', type='test', data={}, recv_ms=0, start_ms=0, end_ms=0, status='pending', retry_count=0))
         await asyncio.sleep(0.05)
         await spp._cleanup()
         assert spp._worker_loops == []
@@ -471,7 +471,7 @@ class TestInprocPushPull:
     async def test_push_creates_simplepushpull(self, inproc_pushpull):
         """Test that push creates SimplePushPull for new subject."""
         subject = "test.subject"
-        job = {"_id": "test_job"}
+        job = Job(_id="test_job", type="test", data={}, recv_ms=0, start_ms=0, end_ms=0, status="pending", retry_count=0)
         
         result = await inproc_pushpull.push(subject, job)
         
@@ -483,8 +483,8 @@ class TestInprocPushPull:
     @pytest.mark.asyncio
     async def test_push_multiple_subjects(self, inproc_pushpull):
         """Test pushing to multiple subjects creates separate SimplePushPull instances."""
-        job1 = {"_id": "job1"}
-        job2 = {"_id": "job2"}
+        job1 = Job(_id="job1", type="test", data={}, recv_ms=0, start_ms=0, end_ms=0, status="pending", retry_count=0)
+        job2 = Job(_id="job2", type="test", data={}, recv_ms=0, start_ms=0, end_ms=0, status="pending", retry_count=0)
         
         await inproc_pushpull.push("subject1", job1)
         await inproc_pushpull.push("subject2", job2)
@@ -558,8 +558,8 @@ class TestInprocPushPull:
     async def test_cleanup_multiple_subjects(self, inproc_pushpull):
         """Test cleanup with multiple subjects."""
         # Create multiple subjects
-        await inproc_pushpull.push("subject1", {"_id": "job1"})
-        await inproc_pushpull.push("subject2", {"_id": "job2"})
+        await inproc_pushpull.push("subject1", Job(_id="job1", type="test", data={}, recv_ms=0, start_ms=0, end_ms=0, status="pending", retry_count=0))
+        await inproc_pushpull.push("subject2", Job(_id="job2", type="test", data={}, recv_ms=0, start_ms=0, end_ms=0, status="pending", retry_count=0))
         
         assert len(inproc_pushpull._pushpulls) == 2
         
@@ -579,7 +579,7 @@ class TestInprocPushPull:
     async def test_reuse_existing_simplepushpull(self, inproc_pushpull):
         """Test that operations reuse existing SimplePushPull for same subject."""
         subject = "test.subject"
-        job = {"_id": "test_job"}
+        job = Job(_id="test_job", type="test", data={}, recv_ms=0, start_ms=0, end_ms=0, status="pending", retry_count=0)
         callback = AsyncMock()
         
         # Push first to create SimplePushPull
@@ -604,10 +604,10 @@ class TestInprocPushPull:
     async def test_push_through_inproc_to_simple(self, inproc_pushpull):
         """Test that push through InprocPushPull correctly delegates to SimplePushPull."""
         subject = "test.subject"
-        job = {"_id": "test_job", "status": "pending"}
+        job = Job(_id="test_job", type="test", data={}, recv_ms=0, start_ms=0, end_ms=0, status="pending", retry_count=0)
         
         result = await inproc_pushpull.push(subject, job)
         
         assert result is True
-        assert job["status"] == "new"  # Should be updated by SimplePushPull
-        assert "recv_ms" in job  # Should be added by SimplePushPull
+        assert job.status == "new"  # Should be updated by SimplePushPull
+        assert job.recv_ms > 0  # Should be updated by SimplePushPull

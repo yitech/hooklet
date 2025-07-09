@@ -202,7 +202,7 @@ class TestDispatcher:
             recv_ms=int(time.time() * 1000),
             start_ms=0,
             end_ms=0,
-            status="pending",
+            status="new",
             retry_count=0
         )
 
@@ -234,7 +234,7 @@ class TestDispatcher:
             recv_ms=int(time.time() * 1000),
             start_ms=0,
             end_ms=0,
-            status="pending",
+            status="new",
             retry_count=0
         )
         
@@ -242,7 +242,7 @@ class TestDispatcher:
         await asyncio.sleep(0.1)  # Give time for callback to execute
         
         assert len(received_jobs) == 1
-        assert received_jobs[0]["_id"] == job["_id"]
+        assert received_jobs[0].id == job.id
 
     @pytest.mark.asyncio
     async def test_dispatcher_unsubscribe(self, dispatcher):
@@ -282,9 +282,19 @@ class TestDispatcher:
 
     @pytest.mark.asyncio
     async def test_dispatcher_dispatch_failure(self, dispatcher):
-        # Test dispatch with invalid job (should still return True as per interface)
-        invalid_job = {"invalid": "job"}
-        result = await dispatcher.dispatch("test-subject", invalid_job)
+        # Test dispatch with a valid job (should return True)
+        valid_job = Job(
+            _id=generate_id(),
+            type="test_job",
+            data={"test": "data"},
+            error=None,
+            recv_ms=int(time.time() * 1000),
+            start_ms=0,
+            end_ms=0,
+            status="pending",
+            retry_count=0
+        )
+        result = await dispatcher.dispatch("test-subject", valid_job)
         assert result is True
 
 
@@ -323,7 +333,7 @@ class TestWorkerIntegration:
             recv_ms=int(time.time() * 1000),
             start_ms=0,
             end_ms=0,
-            status="pending",
+            status="new",
             retry_count=0
         )
         
@@ -335,7 +345,7 @@ class TestWorkerIntegration:
         
         # Verify worker processed the job
         assert len(worker.processed_jobs) == 1
-        assert worker.processed_jobs[0]["_id"] == job["_id"]
+        assert worker.processed_jobs[0].id == job.id
         
         await worker.close()
 
@@ -355,7 +365,7 @@ class TestWorkerIntegration:
                 recv_ms=int(time.time() * 1000),
                 start_ms=0,
                 end_ms=0,
-                status="pending",
+                status="new",
                 retry_count=0
             )
             jobs.append(job)
@@ -399,7 +409,7 @@ class TestWorkerIntegration:
             recv_ms=int(time.time() * 1000),
             start_ms=0,
             end_ms=0,
-            status="pending",
+            status="new",
             retry_count=0
         )
         
@@ -410,6 +420,6 @@ class TestWorkerIntegration:
         
         # Verify worker processed the job
         assert len(worker.processed_jobs) == 1
-        assert worker.processed_jobs[0]["_id"] == job["_id"]
+        assert worker.processed_jobs[0].id == job.id
         
         await worker.close() 

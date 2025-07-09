@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
 
 from hooklet.pilot.nats_pilot import NatsPilot, NatsPushPull
-from hooklet.base.types import Job, Msg
+from hooklet.base.types import Job, Msg, Req, Reply
 from hooklet.utils.id_generator import generate_id
 
 def suppress_async_mock_warnings():
@@ -60,7 +60,7 @@ async def test_nats_pilot_pubsub():
         assert subscription_id is not None
         
         # Publish a message
-        test_msg = {"data": "test message", "timestamp": 1234567890}
+        test_msg = Msg(type="test", data={"message": "test message", "timestamp": 1234567890})
         await pubsub.publish("test.subject", test_msg)
         
         # Give some time for the message to be processed
@@ -73,6 +73,11 @@ async def test_nats_pilot_pubsub():
         await pilot.disconnect()
         
     except Exception:
+        # Ensure proper cleanup of background tasks
+        try:
+            await pilot.disconnect()
+        except Exception:
+            pass
         pytest.skip("NATS server not available")
 
 @pytest.mark.asyncio
@@ -89,18 +94,24 @@ async def test_nats_pilot_reqreply():
         reqreply = pilot.reqreply()
         
         # Register a callback
-        async def echo_callback(msg: Msg):
-            return {"echo": msg.get("data", ""), "received": True}
+        async def echo_callback(req_data: dict) -> Reply:
+            current_time = int(time.time() * 1000)
+            return Reply(
+                type="echo_response",
+                result={"echo": req_data.get("params", {}).get("data", ""), "received": True},
+                start_ms=current_time,
+                end_ms=current_time
+            )
         
         subject = await reqreply.register_callback("echo.service", echo_callback)
         assert subject == "echo.service"
         
         # Make a request
-        request_msg = {"data": "hello world"}
+        request_msg = Req(type="echo", params={"data": "hello world"})
         response = await reqreply.request("echo.service", request_msg)
         
-        assert response["echo"] == "hello world"
-        assert response["received"] is True
+        assert response["result"]["echo"] == "hello world"
+        assert response["result"]["received"] is True
         
         # Unregister callback
         await reqreply.unregister_callback("echo.service")
@@ -108,6 +119,11 @@ async def test_nats_pilot_reqreply():
         await pilot.disconnect()
         
     except Exception:
+        # Ensure proper cleanup of background tasks
+        try:
+            await pilot.disconnect()
+        except Exception:
+            pass
         pytest.skip("NATS server not available")
 
 @pytest.mark.asyncio
@@ -153,11 +169,16 @@ async def test_nats_pilot_pushpull():
         
         # Verify job was processed
         assert len(processed_jobs) == 1
-        assert processed_jobs[0]["_id"] == job["_id"]
+        assert processed_jobs[0].id == job.id
         
         await pilot.disconnect()
         
     except Exception:
+        # Ensure proper cleanup of background tasks
+        try:
+            await pilot.disconnect()
+        except Exception:
+            pass
         pytest.skip("NATS server not available")
 
 @pytest.mark.asyncio
@@ -460,15 +481,15 @@ class TestNatsPushPull:
         # Verify _ensure_stream was called
         mock_js_context.stream_info.assert_called_once_with("TEST-SUBJECT")
         
-        # Verify publish was called with correct parameters
+                # Verify publish was called with correct parameters
         mock_js_context.publish.assert_called_once_with(
-            "test.subject.job", 
-            json.dumps(sample_job).encode()
+            "test.subject.job",
+            json.dumps(sample_job.model_dump(by_alias=True)).encode()
         )
         
         # Verify job was updated with recv_ms and status
-        assert sample_job["status"] == "new"
-        assert sample_job["recv_ms"] > 0
+        assert sample_job.status == "new"
+        assert sample_job.recv_ms > 0
 
     @pytest.mark.asyncio
     async def test_push_failure(self, mock_pilot, mock_js_context, sample_job):
@@ -621,7 +642,7 @@ class TestNatsPushPull:
         # Verify publish was called with correct parameters
         mock_pilot._nats_client.publish.assert_called_once_with(
             "test.subject.subscriber",
-            json.dumps(sample_job).encode()
+            json.dumps(sample_job.model_dump(by_alias=True)).encode()
         )
 
     @pytest.mark.asyncio
@@ -649,7 +670,7 @@ class TestNatsPushPull:
         # Verify publish was still called (implementation publishes regardless of empty list)
         mock_pilot._nats_client.publish.assert_called_once_with(
             "test.subject.subscriber",
-            json.dumps(sample_job).encode()
+            json.dumps(sample_job.model_dump(by_alias=True)).encode()
         )
 
     @pytest.mark.asyncio
