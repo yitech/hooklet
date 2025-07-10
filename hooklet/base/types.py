@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
+from typing import Any, Literal, Optional
 from uuid import uuid4
-from typing import Any, Optional, Literal
+
+from pydantic import BaseModel, Field
 
 
 class Msg(BaseModel):

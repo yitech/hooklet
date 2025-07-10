@@ -221,9 +221,7 @@ class NatsPushPull(PushPull):
             # Notify subscriptions
             # await self._notify_subscriptions(subject, job)
 
-            logger.info(
-                f"Pushed job {job.id} to {self.job_subject(subject)}, sequence: {ack.seq}"
-            )
+            logger.info(f"Pushed job {job.id} to {self.job_subject(subject)}, sequence: {ack.seq}")
             return True
 
         except Exception as e:
@@ -354,7 +352,9 @@ class NatsPushPull(PushPull):
         if subscription_subject not in self._nats_subscriptions:
             return
 
-        await self._nats_client.publish(subscription_subject, json.dumps(job.model_dump(by_alias=True)).encode())
+        await self._nats_client.publish(
+            subscription_subject, json.dumps(job.model_dump(by_alias=True)).encode()
+        )
 
     async def _cleanup(self) -> None:
         """Clean up all resources."""
