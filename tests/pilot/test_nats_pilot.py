@@ -94,11 +94,11 @@ async def test_nats_pilot_reqreply():
         reqreply = pilot.reqreply()
         
         # Register a callback
-        async def echo_callback(req_data: dict) -> Reply:
+        async def echo_callback(req: Req) -> Reply:
             current_time = int(time.time() * 1000)
             return Reply(
                 type="echo_response",
-                result={"echo": req_data.get("params", {}).get("data", ""), "received": True},
+                result={"echo": req.params.get("data", ""), "received": True},
                 start_ms=current_time,
                 end_ms=current_time
             )
@@ -110,8 +110,8 @@ async def test_nats_pilot_reqreply():
         request_msg = Req(type="echo", params={"data": "hello world"})
         response = await reqreply.request("echo.service", request_msg)
         
-        assert response["result"]["echo"] == "hello world"
-        assert response["result"]["received"] is True
+        assert response.result["echo"] == "hello world"
+        assert response.result["received"] is True
         
         # Unregister callback
         await reqreply.unregister_callback("echo.service")

@@ -35,8 +35,7 @@ class NatsPubSub(PubSub):
 
         async def nats_callback(msg: NatsMsg):
             try:
-
-                data = json.loads(msg.data.decode())
+                data = Msg.model_validate_json(msg.data.decode())
                 await callback(data)
             except Exception as e:
                 logger.error(
@@ -95,24 +94,23 @@ class NatsReqReply(ReqReply):
         payload = json.dumps(req.model_dump(by_alias=True)).encode()
         try:
             response = await self._pilot._nats_client.request(subject, payload, timeout=timeout)
-            return json.loads(response.data.decode())
+            return Reply.model_validate_json(response.data.decode())
         except asyncio.TimeoutError:
             raise TimeoutError(f"Request to {subject} timed out after {timeout} seconds")
         except Exception as e:
             raise e
 
     async def register_callback(
-        self, subject: str, callback: Callable[[Any], Awaitable[Any]]
+        self, subject: str, callback: Callable[[Req], Awaitable[Reply]]
     ) -> str:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
 
         async def nats_callback(msg: NatsMsg):
             try:
-                data = json.loads(msg.data.decode())
+                data = Req.model_validate_json(msg.data.decode())
                 response = await callback(data)
-                # Handle both Pydantic models and dictionaries
-                response_payload = json.dumps(response.model_dump(by_alias=True)).encode()
+                response_payload = response.model_dump_json(by_alias=True).encode()
 
                 await msg.respond(response_payload)
             except Exception as e:
