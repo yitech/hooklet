@@ -17,7 +17,7 @@ class TestRPCServer:
     class MockServer(RPCServer):
         """Concrete implementation of RPCServer for testing."""
         async def on_request(self, req: Req) -> Reply:
-            params = req.get("params", {})
+            params = req.params
             operation = params.get("operation", "unknown")
             data = params.get("data", {})
             
@@ -31,14 +31,13 @@ class TestRPCServer:
             else:
                 result = {"error": "Unknown operation"}
             
-            return {
-                "_id": generate_id(),
-                "type": "reply",
-                "result": result,
-                "error": None,
-                "start_ms": start_ms,
-                "end_ms": end_ms
-            }
+            return Reply(
+                type="reply",
+                result=result,
+                error=None,
+                start_ms=start_ms,
+                end_ms=end_ms
+            )
 
     @pytest_asyncio.fixture(scope="function")
     async def pilot(self):
@@ -84,22 +83,21 @@ class TestRPCServer:
         await server.start()
         
         # Create a test request
-        test_req: Req = {
-            "_id": generate_id(),
-            "type": "request",
-            "params": {
+        test_req = Req(
+            type="request",
+            params={
                 "operation": "add",
                 "data": {"a": 5, "b": 3}
             },
-            "error": None
-        }
+            error=None
+        )
         
         # Call the callback directly
         response = await server.on_request(test_req)
         
-        assert response["type"] == "reply"
-        assert response["result"]["sum"] == 8
-        assert response["error"] is None
+        assert response.type == "reply"
+        assert response.result["sum"] == 8
+        assert response.error is None
         
         await server.close()
 
@@ -109,18 +107,16 @@ class TestRPCServer:
         await server.start()
         
         requests = [
-            {
-                "_id": generate_id(),
-                "type": "request",
-                "params": {"operation": "add", "data": {"a": 1, "b": 2}},
-                "error": None
-            },
-            {
-                "_id": generate_id(),
-                "type": "request",
-                "params": {"operation": "multiply", "data": {"a": 3, "b": 4}},
-                "error": None
-            }
+            Req(
+                type="request",
+                params={"operation": "add", "data": {"a": 1, "b": 2}},
+                error=None
+            ),
+            Req(
+                type="request",
+                params={"operation": "multiply", "data": {"a": 3, "b": 4}},
+                error=None
+            )
         ]
         
         responses = []
@@ -129,8 +125,8 @@ class TestRPCServer:
             responses.append(response)
         
         assert len(responses) == 2
-        assert responses[0]["result"]["sum"] == 3
-        assert responses[1]["result"]["product"] == 12
+        assert responses[0].result["sum"] == 3
+        assert responses[1].result["product"] == 12
         
         await server.close()
 
@@ -180,7 +176,7 @@ class TestRPCClient:
         """Create a test server for client tests."""
         class MockServer(RPCServer):
             async def on_request(self, req: Req) -> Reply:
-                params = req.get("params", {})
+                params = req.params
                 operation = params.get("operation", "unknown")
                 data = params.get("data", {})
                 
@@ -192,14 +188,13 @@ class TestRPCClient:
                 else:
                     result = {"error": "Unknown operation"}
                 
-                return {
-                    "_id": generate_id(),
-                    "type": "reply",
-                    "result": result,
-                    "error": None,
-                    "start_ms": start_ms,
-                    "end_ms": end_ms
-                }
+                return Reply(
+                    type="reply",
+                    result=result,
+                    error=None,
+                    start_ms=start_ms,
+                    end_ms=end_ms
+                )
         
         return MockServer("test-server", reqreply)
 
@@ -215,22 +210,21 @@ class TestRPCClient:
         await server.start()
         
         # Create a test request
-        test_req: Req = {
-            "_id": generate_id(),
-            "type": "request",
-            "params": {
+        test_req = Req(
+            type="request",
+            params={
                 "operation": "add",
                 "data": {"a": 10, "b": 20}
             },
-            "error": None
-        }
+            error=None
+        )
         
         # Make the request
         response = await client.request("test-server", test_req)
         
-        assert response["type"] == "reply"
-        assert response["result"]["sum"] == 30
-        assert response["error"] is None
+        assert response.type == "reply"
+        assert response.result["sum"] == 30
+        assert response.error is None
         
         await server.close()
 
@@ -241,18 +235,16 @@ class TestRPCClient:
         await server.start()
         
         requests = [
-            {
-                "_id": generate_id(),
-                "type": "request",
-                "params": {"operation": "add", "data": {"a": 1, "b": 2}},
-                "error": None
-            },
-            {
-                "_id": generate_id(),
-                "type": "request",
-                "params": {"operation": "add", "data": {"a": 5, "b": 5}},
-                "error": None
-            }
+            Req(
+                type="request",
+                params={"operation": "add", "data": {"a": 1, "b": 2}},
+                error=None
+            ),
+            Req(
+                type="request",
+                params={"operation": "add", "data": {"a": 5, "b": 5}},
+                error=None
+            )
         ]
         
         responses = []
@@ -261,8 +253,8 @@ class TestRPCClient:
             responses.append(response)
         
         assert len(responses) == 2
-        assert responses[0]["result"]["sum"] == 3
-        assert responses[1]["result"]["sum"] == 10
+        assert responses[0].result["sum"] == 3
+        assert responses[1].result["sum"] == 10
         
         await server.close()
 
@@ -271,12 +263,11 @@ class TestRPCClient:
         """Test client request to non-existent server."""
         await pilot.connect()
         
-        test_req: Req = {
-            "_id": generate_id(),
-            "type": "request",
-            "params": {"operation": "add", "data": {"a": 1, "b": 2}},
-            "error": None
-        }
+        test_req = Req(
+            type="request",
+            params={"operation": "add", "data": {"a": 1, "b": 2}},
+            error=None
+        )
         
         with pytest.raises(ValueError, match="No callback registered for test-server"):
             await client.request("test-server", test_req)
@@ -287,21 +278,19 @@ class TestRPCClient:
         mock_reqreply = AsyncMock()
         client = RPCClient(mock_reqreply)
         
-        test_req: Req = {
-            "_id": generate_id(),
-            "type": "request",
-            "params": {"operation": "test"},
-            "error": None
-        }
+        test_req = Req(
+            type="request",
+            params={"operation": "test"},
+            error=None
+        )
         
-        mock_response: Reply = {
-            "_id": generate_id(),
-            "type": "reply",
-            "result": {"status": "success"},
-            "error": None,
-            "start_ms": int(time.time() * 1000),
-            "end_ms": int(time.time() * 1000)
-        }
+        mock_response = Reply(
+            type="reply",
+            result={"status": "success"},
+            error=None,
+            start_ms=int(time.time() * 1000),
+            end_ms=int(time.time() * 1000)
+        )
         
         mock_reqreply.request.return_value = mock_response
         
@@ -330,7 +319,7 @@ class TestRPCIntegration:
         # Create a server with custom callback
         class IntegrationServer(RPCServer):
             async def on_request(self, req: Req) -> Reply:
-                params = req.get("params", {})
+                params = req.params
                 operation = params.get("operation", "unknown")
                 data = params.get("data", "")
 
@@ -344,14 +333,13 @@ class TestRPCIntegration:
                 else:
                     result = {"error": "Unknown operation"}
 
-                return {
-                    "_id": generate_id(),
-                    "type": "reply",
-                    "result": result,
-                    "error": None,
-                    "start_ms": start_ms,
-                    "end_ms": end_ms
-                }
+                return Reply(
+                    type="reply",
+                    result=result,
+                    error=None,
+                    start_ms=start_ms,
+                    end_ms=end_ms
+                )
 
         server = IntegrationServer("math-server", reqreply)
         client = RPCClient(reqreply)
@@ -359,32 +347,30 @@ class TestRPCIntegration:
         await server.start()
 
         # Test add operation
-        add_req: Req = {
-            "_id": generate_id(),
-            "type": "request",
-            "params": {
+        add_req = Req(
+            type="request",
+            params={
                 "operation": "add",
                 "data": {"a": 15, "b": 25}
             },
-            "error": None
-        }
+            error=None
+        )
 
         add_response = await client.request("math-server", add_req)
-        assert add_response["result"]["sum"] == 40
+        assert add_response.result["sum"] == 40
 
         # Test multiply operation
-        multiply_req: Req = {
-            "_id": generate_id(),
-            "type": "request",
-            "params": {
+        multiply_req = Req(
+            type="request",
+            params={
                 "operation": "multiply",
                 "data": {"a": 6, "b": 7}
             },
-            "error": None
-        }
+            error=None
+        )
 
         multiply_response = await client.request("math-server", multiply_req)
-        assert multiply_response["result"]["product"] == 42
+        assert multiply_response.result["product"] == 42
 
         await server.close()
 
@@ -411,14 +397,13 @@ class TestRPCIntegration:
                 start_ms = int(time.time() * 1000)
                 end_ms = int(time.time() * 1000)
 
-                return {
-                    "_id": generate_id(),
-                    "type": "reply",
-                    "result": {"processed": True, "count": current_count},
-                    "error": None,
-                    "start_ms": start_ms,
-                    "end_ms": end_ms
-                }
+                return Reply(
+                    type="reply",
+                    result={"processed": True, "count": current_count},
+                    error=None,
+                    start_ms=start_ms,
+                    end_ms=end_ms
+                )
 
         server = ConcurrentServer("concurrent-server", reqreply)
         client = RPCClient(reqreply)
@@ -428,20 +413,19 @@ class TestRPCIntegration:
         # Send multiple concurrent requests
         requests = []
         for i in range(5):
-            req: Req = {
-                "_id": generate_id(),
-                "type": "request",
-                "params": {"operation": "test", "data": {"index": i}},
-                "error": None
-            }
+            req = Req(
+                type="request",
+                params={"operation": "test", "data": {"index": i}},
+                error=None
+            )
             requests.append(client.request("concurrent-server", req))
 
         responses = await asyncio.gather(*requests)
 
         assert len(responses) == 5
         for i, response in enumerate(responses):
-            assert response["result"]["processed"] is True
-            assert response["result"]["count"] == i + 1
+            assert response.result["processed"] is True
+            assert response.result["count"] == i + 1
 
         await server.close()
 
@@ -453,30 +437,28 @@ class TestRPCIntegration:
 
         class ErrorServer(RPCServer):
             async def on_request(self, req: Req) -> Reply:
-                params = req.get("params", {})
+                params = req.params
                 should_error = params.get("should_error", False)
 
                 start_ms = int(time.time() * 1000)
                 end_ms = int(time.time() * 1000)
 
                 if should_error:
-                    return {
-                        "_id": generate_id(),
-                        "type": "reply",
-                        "result": None,
-                        "error": "Simulated error occurred",
-                        "start_ms": start_ms,
-                        "end_ms": end_ms
-                    }
+                    return Reply(
+                        type="reply",
+                        result=None,
+                        error="Simulated error occurred",
+                        start_ms=start_ms,
+                        end_ms=end_ms
+                    )
                 else:
-                    return {
-                        "_id": generate_id(),
-                        "type": "reply",
-                        "result": {"status": "success"},
-                        "error": None,
-                        "start_ms": start_ms,
-                        "end_ms": end_ms
-                    }
+                    return Reply(
+                        type="reply",
+                        result={"status": "success"},
+                        error=None,
+                        start_ms=start_ms,
+                        end_ms=end_ms
+                    )
 
         server = ErrorServer("error-server", reqreply)
         client = RPCClient(reqreply)
@@ -484,28 +466,26 @@ class TestRPCIntegration:
         await server.start()
 
         # Test successful request
-        success_req: Req = {
-            "_id": generate_id(),
-            "type": "request",
-            "params": {"should_error": False},
-            "error": None
-        }
+        success_req = Req(
+            type="request",
+            params={"should_error": False},
+            error=None
+        )
 
         success_response = await client.request("error-server", success_req)
-        assert success_response["result"]["status"] == "success"
-        assert success_response["error"] is None
+        assert success_response.result["status"] == "success"
+        assert success_response.error is None
 
         # Test error request
-        error_req: Req = {
-            "_id": generate_id(),
-            "type": "request",
-            "params": {"should_error": True},
-            "error": None
-        }
+        error_req = Req(
+            type="request",
+            params={"should_error": True},
+            error=None
+        )
 
         error_response = await client.request("error-server", error_req)
-        assert error_response["result"] is None
-        assert error_response["error"] == "Simulated error occurred"
+        assert error_response.result is None
+        assert error_response.error == "Simulated error occurred"
 
         await server.close()
 

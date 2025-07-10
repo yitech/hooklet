@@ -69,8 +69,8 @@ class BaseWorker(Worker):
         
     async def on_job(self, job: Job) -> int:
         """Process job with monitoring and error handling - required by Worker class"""
-        job_id = job.get('_id', 'unknown')
-        job_type = job.get('type', 'unknown')
+        job_id = job.id if job.id else 'unknown'
+        job_type = job.type if job.type else 'unknown'
         
         start_time = time.time()
         print(f"🔄 {self.name} processing job {job_id[:8]}: {job_type}")
@@ -115,8 +115,8 @@ class TextWorker(BaseWorker):
     
     async def process_job(self, job: Job) -> JobResult:
         """Process text-related jobs"""
-        job_type = job.get('type')
-        data = job.get('data', {})
+        job_type = job.type
+        data = job.data or {}
         text = data.get('text', '')
         
         if not text:
@@ -159,8 +159,8 @@ class ImageWorker(BaseWorker):
     
     async def process_job(self, job: Job) -> JobResult:
         """Process image-related jobs"""
-        job_type = job.get('type')
-        data = job.get('data', {})
+        job_type = job.type
+        data = job.data or {}
         
         # Simulate processing delay
         await asyncio.sleep(0.3)
@@ -209,8 +209,8 @@ class DataWorker(BaseWorker):
     
     async def process_job(self, job: Job) -> JobResult:
         """Process data analysis jobs"""
-        job_type = job.get('type')
-        data = job.get('data', {})
+        job_type = job.type
+        data = job.data or {}
         numbers = data.get('numbers', [])
         
         if not numbers:
@@ -266,9 +266,9 @@ class JobMonitor:
     
     async def _handle_job_status(self, job: Job):
         """Handle job status updates"""
-        job_id = job.get('_id', 'unknown')
-        status = job.get('status', 'unknown')
-        job_type = job.get('type', 'unknown')
+        job_id = job.id if job.id else 'unknown'
+        status = job.status if job.status else 'unknown'
+        job_type = job.type if job.type else 'unknown'
         
         # Update job history
         if job_id not in self.job_history:
@@ -290,8 +290,8 @@ class JobMonitor:
         emoji = self._get_status_emoji(status)
         print(f"{emoji} Job {job_id[:8]} [{job_type}]: {status}")
         
-        if status == "failed" and job.get('error'):
-            print(f"   ❌ Error: {job.get('error')}")
+        if status == "failed" and job.error:
+            print(f"   ❌ Error: {job.error}")
     
     def _get_status_emoji(self, status: str) -> str:
         """Get emoji for job status"""
@@ -320,17 +320,17 @@ class JobFactory:
     @staticmethod
     def create_job(job_type: JobType, data: Dict[str, Any]) -> Job:
         """Create a job with proper structure"""
-        return {
-            "_id": generate_id(),
-            "type": job_type.value,
-            "data": data,
-            "error": None,
-            "recv_ms": int(time.time() * 1000),
-            "start_ms": 0,
-            "end_ms": 0,
-            "status": JobStatus.NEW.value,
-            "retry_count": 0
-        }
+        return Job(
+            _id=generate_id(),
+            type=job_type.value,
+            data=data,
+            error=None,
+            recv_ms=int(time.time() * 1000),
+            start_ms=0,
+            end_ms=0,
+            status=JobStatus.NEW.value,
+            retry_count=0
+        )
     
     @staticmethod
     def create_text_job(job_type: JobType, text: str) -> Job:
@@ -407,7 +407,7 @@ class WorkerSystem:
         # Dispatch all jobs
         all_jobs = text_jobs + image_jobs + data_jobs
         for job in all_jobs:
-            subject = self._get_subject_for_job(job['type'])
+            subject = self._get_subject_for_job(job.type)
             await self.dispatcher.dispatch(subject, job)
         
         print(f"📤 Dispatched {len(all_jobs)} jobs")
@@ -421,7 +421,7 @@ class WorkerSystem:
         ]
         
         for job in error_jobs:
-            subject = self._get_subject_for_job(job['type'])
+            subject = self._get_subject_for_job(job.type)
             await self.dispatcher.dispatch(subject, job)
         
         print(f"📤 Dispatched {len(error_jobs)} error test jobs")

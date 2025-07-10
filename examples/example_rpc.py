@@ -26,8 +26,8 @@ class ArithmeticServer(RPCServer):
         
         try:
             # Extract operation and operands from request
-            operation = req.get('type')
-            params = req.get('params', {})
+            operation = req.type
+            params = req.params
             a = params.get('a')
             b = params.get('b')
             
@@ -56,7 +56,6 @@ class ArithmeticServer(RPCServer):
             end_ms = int(time.time() * 1000)
             
             return Reply(
-                _id=req.get('_id', str(uuid.uuid4())),
                 type=operation,
                 result=result,
                 error=None,
@@ -67,8 +66,7 @@ class ArithmeticServer(RPCServer):
         except Exception as e:
             end_ms = int(time.time() * 1000)
             return Reply(
-                _id=req.get('_id', str(uuid.uuid4())),
-                type=req.get('type', 'unknown'),
+                type=req.type,
                 result=None,
                 error=str(e),
                 start_ms=start_ms,
@@ -82,62 +80,58 @@ class ArithmeticClient(RPCClient):
     async def add(self, a: float, b: float) -> float:
         """Add two numbers"""
         req = Req(
-            _id=str(uuid.uuid4()),
             type='add',
             params={'a': a, 'b': b},
             error=None
         )
         reply = await self.request('arithmetic-server', req)
         
-        if reply.get('error'):
-            raise ValueError(f"Add operation failed: {reply['error']}")
+        if reply.error:
+            raise ValueError(f"Add operation failed: {reply.error}")
         
-        return reply['result']
+        return reply.result
     
     async def subtract(self, a: float, b: float) -> float:
         """Subtract two numbers"""
         req = Req(
-            _id=str(uuid.uuid4()),
             type='subtract',
             params={'a': a, 'b': b},
             error=None
         )
         reply = await self.request('arithmetic-server', req)
         
-        if reply.get('error'):
-            raise ValueError(f"Subtract operation failed: {reply['error']}")
+        if reply.error:
+            raise ValueError(f"Subtract operation failed: {reply.error}")
         
-        return reply['result']
+        return reply.result
     
     async def multiply(self, a: float, b: float) -> float:
         """Multiply two numbers"""
         req = Req(
-            _id=str(uuid.uuid4()),
             type='multiply',
             params={'a': a, 'b': b},
             error=None
         )
         reply = await self.request('arithmetic-server', req)
         
-        if reply.get('error'):
-            raise ValueError(f"Multiply operation failed: {reply['error']}")
+        if reply.error:
+            raise ValueError(f"Multiply operation failed: {reply.error}")
         
-        return reply['result']
+        return reply.result
     
     async def divide(self, a: float, b: float) -> float:
         """Divide two numbers"""
         req = Req(
-            _id=str(uuid.uuid4()),
             type='divide',
             params={'a': a, 'b': b},
             error=None
         )
         reply = await self.request('arithmetic-server', req)
         
-        if reply.get('error'):
-            raise ValueError(f"Divide operation failed: {reply['error']}")
+        if reply.error:
+            raise ValueError(f"Divide operation failed: {reply.error}")
         
-        return reply['result']
+        return reply.result
 
 
 async def run_demo():
