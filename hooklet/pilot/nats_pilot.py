@@ -95,8 +95,8 @@ class NatsReqReply(ReqReply):
         try:
             response = await self._pilot._nats_client.request(subject, payload, timeout=timeout)
             return Reply.model_validate_json(response.data.decode())
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"Request to {subject} timed out after {timeout} seconds")
+        except asyncio.TimeoutError as exc:
+            raise TimeoutError(f"Request to {subject} timed out after {timeout} seconds") from exc
         except Exception as e:
             raise e
 

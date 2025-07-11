@@ -13,9 +13,9 @@ class InprocPubSub(PubSub):
     def __init__(self) -> None:
         self._subscriptions: Dict[str, list[Callable[[Msg], Awaitable[Any]]]] = defaultdict(list)
 
-    async def publish(self, subject: str, data: Msg) -> None:
+    async def publish(self, subject: str, msg: Msg) -> None:
         subscriptions = self._subscriptions[subject]
-        tasks = [callback(data) for callback in subscriptions]
+        tasks = [callback(msg) for callback in subscriptions]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for i, result in enumerate(results):
             if isinstance(result, Exception):
@@ -51,16 +51,18 @@ class InprocReqReply(ReqReply):
     def __init__(self) -> None:
         self._callbacks: Dict[str, Callable[[Req], Awaitable[Reply]]] = {}
 
-    async def request(self, subject: str, data: Req, timeout: float = 10.0) -> Reply:
+    async def request(self, subject: str, req: Req, timeout: float = 10.0) -> Reply:
         if subject not in self._callbacks:
             raise ValueError(f"No callback registered for {subject}")
         try:
-            result = await asyncio.wait_for(self._callbacks[subject](data), timeout=timeout)
+            result = await asyncio.wait_for(self._callbacks[subject](req), timeout=timeout)
             return result
         except asyncio.TimeoutError:
             start_ms = int(time.time() * 1000)
             end_ms = int(time.time() * 1000)
-            return Reply(type="error", result=None, error="Timeout", start_ms=start_ms, end_ms=end_ms)
+            return Reply(
+                type="error", result=None, error="Timeout", start_ms=start_ms, end_ms=end_ms
+            )
         except Exception as e:
             start_ms = int(time.time() * 1000)
             end_ms = int(time.time() * 1000)
@@ -160,18 +162,18 @@ class SimplePushPull:
                 # Wait for either a job or shutdown signal
                 job_task = asyncio.create_task(self._job_queue.get())
                 shutdown_task = asyncio.create_task(self._shutdown_event.wait())
-                
+
                 done, pending = await asyncio.wait(
                     [job_task, shutdown_task],
                     return_when=asyncio.FIRST_COMPLETED,
                 )
-                
+
                 for task in pending:
                     task.cancel()
-                    
+
                 if shutdown_task in done:
                     break
-                    
+
                 if job_task in done:
                     job: Job = job_task.result()
                     job.start_ms = int(time.time() * 1000)
@@ -192,7 +194,7 @@ class SimplePushPull:
                         job.status = "failed"
                         job.error = str(e)
                         await self._notify_subscriptions(job)
-                        
+
             except Exception as e:
                 logger.error(f"Error in worker loop for {self.subject}: {e}")
 

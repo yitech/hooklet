@@ -8,9 +8,12 @@ disable=
     C1801, # len-as-condition
     R0903, # too-few-public-methods
     R0913, # too-many-arguments
+    R0917, # too-many-positional-arguments
     W0212, # protected-access
     W0621, # redefined-outer-name
     W1203, # logging-fstring-interpolation
+    W0718, # broad-exception-raised
+
 
 [FORMAT]
 max-line-length=100

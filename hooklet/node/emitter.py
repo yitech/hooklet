@@ -46,8 +46,8 @@ class Emitter(Node, ABC):
 
     async def run(self):
         try:
-            async with aclosing(self.emit()) as gen: # type: ignore[type-var]
-                async for msg in gen: # type: ignore[attr-defined]
+            async with aclosing(self.emit()) as gen:  # type: ignore[type-var]
+                async for msg in gen:  # type: ignore[attr-defined]
                     if self.shutdown_event.is_set():
                         break
                     subject = self.router(msg)

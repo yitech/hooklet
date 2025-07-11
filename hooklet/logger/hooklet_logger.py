@@ -94,9 +94,6 @@ class HookletLoggerConfig:
         self.max_backup = max_backup
         self.extra_fields = extra_fields or {}
 
-        # Validate configuration
-        self._validate()
-
     def _normalize_level(self, level: Union[LogLevel, str, int]) -> int:
         """Normalize log level to integer."""
         if isinstance(level, LogLevel):
@@ -106,11 +103,6 @@ class HookletLoggerConfig:
         if isinstance(level, int):
             return level
         raise ValueError(f"Invalid log level: {level}")
-
-    def _validate(self):
-        """Validate configuration parameters."""
-        # Directory validation removed - the file handler will create directories as needed
-        pass
 
 
 class HookletLogger:
