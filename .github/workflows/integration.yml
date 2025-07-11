@@ -30,18 +30,18 @@ jobs:
         run: |
           docker run -d --name nats -p 4222:4222 -p 8222:8222 nats:latest -js
 
-      # - name: Run mypy
-      #   run: |
-      #     mypy --ignore-missing-imports --check-untyped-defs hooklet
+      - name: Run mypy
+        run: |
+          mypy --ignore-missing-imports --check-untyped-defs hooklet
 
-      # - name: Run flake8
-      #   run: |
-      #     flake8 hooklet
+      - name: Run flake8
+        run: |
+          flake8 hooklet
 
       - name: Generate Report
         run: |
           pip install pytest httpx pytest-asyncio pytest-cov
-          pytest --cov=hooklet --cov-report=xml
+          pytest --cov=hooklet --cov-report=xml --cov-config=.coveragerc
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5

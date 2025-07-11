@@ -11,7 +11,6 @@ from .hooklet_logger import (
     LogLevel,
     configure_logging,
     get_logger,
-    log_performance,
     setup_default_logging,
 )
 from .node_logger import get_node_logger
@@ -24,7 +23,6 @@ __all__ = [
     "setup_default_logging",
     "get_logger",
     "configure_logging",
-    "log_performance",
     "get_node_logger",
 ]
 

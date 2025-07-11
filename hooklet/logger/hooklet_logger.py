@@ -5,16 +5,14 @@ A simple logging system for the Hooklet framework that provides:
 - Configurable log levels
 - Multiple output formats (simple text, detailed text, or JSON)
 - Always logs to stdout with optional file output
-- Performance metrics and structured logging
+- Structured logging
 """
 
-import asyncio
 import json
 import logging
 import logging.handlers
 import sys
 import threading
-from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -60,54 +58,11 @@ class JSONFormatter(logging.Formatter):
             log_entry["exception"] = self.formatException(record.exc_info)
 
         # Add extra fields if present
-        if hasattr(record, "extra_fields"):
-            log_entry.update(record.extra_fields)
+        extra_fields = getattr(record, "extra_fields", None)
+        if extra_fields:
+            log_entry.update(extra_fields)
 
         return json.dumps(log_entry, ensure_ascii=False)
-
-
-class PerformanceFormatter(logging.Formatter):
-    """Formatter for performance logging messages."""
-
-    def __init__(self, base_formatter: logging.Formatter):
-        """Initialize with a base formatter for standard log formatting.
-
-        Args:
-            base_formatter: The base formatter to use for standard log fields
-        """
-        super().__init__()
-        self.base_formatter = base_formatter
-
-    def format(self, record: logging.LogRecord) -> str:
-        """Format performance log record."""
-        # Create performance-specific message
-        if getattr(record, "event", None) == "start":
-            perf_message = f"⏱️  Starting operation: {record.operation}"
-        elif getattr(record, "event", None) == "complete":
-            perf_message = (
-                f"✅ Completed operation: {record.operation} (took {record.duration:.3f}s)"
-            )
-        elif getattr(record, "event", None) == "error":
-            perf_message = (
-                f"❌ Failed operation: {record.operation} "
-                f"(failed after {record.duration:.3f}s) - {record.error}"
-            )
-        else:
-            # Fallback to base formatter for non-performance logs
-            return self.base_formatter.format(record)
-
-        # Replace the message with our performance message
-        original_message = record.getMessage()
-        record.msg = perf_message
-        record.args = ()
-
-        # Format using the base formatter
-        formatted = self.base_formatter.format(record)
-
-        # Restore original message
-        record.msg = original_message
-
-        return formatted
 
 
 class HookletLoggerConfig:
@@ -118,8 +73,8 @@ class HookletLoggerConfig:
         level: Union[LogLevel, str, int] = LogLevel.INFO,
         format_type: LogFormat = LogFormat.DETAILED,
         log_file: Optional[str] = None,
-        enable_async_context: bool = True,
-        enable_performance_logging: bool = False,
+        rotation: bool = False,
+        max_backup: int = 5,
         extra_fields: Optional[Dict[str, Any]] = None,
     ):
         """Initialize logger configuration.
@@ -128,36 +83,26 @@ class HookletLoggerConfig:
             level: Logging level (LogLevel enum, string, or int)
             format_type: Format type for log messages
             log_file: Optional path to log file for additional file output
-            enable_async_context: Include async context in logs
-            enable_performance_logging: Enable performance metrics
+            rotation: Enable log rotation at midnight
+            max_backup: Maximum number of backup files to keep
             extra_fields: Additional fields to include in all log messages
         """
         self.level = self._normalize_level(level)
         self.format_type = format_type
         self.log_file = log_file
-        self.enable_async_context = enable_async_context
-        self.enable_performance_logging = enable_performance_logging
+        self.rotation = rotation
+        self.max_backup = max_backup
         self.extra_fields = extra_fields or {}
-
-        # Validate configuration
-        self._validate()
 
     def _normalize_level(self, level: Union[LogLevel, str, int]) -> int:
         """Normalize log level to integer."""
         if isinstance(level, LogLevel):
             return level.value
         if isinstance(level, str):
-            return getattr(logging, level.upper())
+            return getattr(logging, level.upper(), logging.INFO)
         if isinstance(level, int):
             return level
         raise ValueError(f"Invalid log level: {level}")
-
-    def _validate(self):
-        """Validate configuration parameters."""
-        if self.log_file:
-            log_path = Path(self.log_file)
-            if not log_path.parent.exists():
-                raise ValueError(f"Log directory does not exist: {log_path.parent}")
 
 
 class HookletLogger:
@@ -180,13 +125,17 @@ class HookletLogger:
         Args:
             config: Logger configuration. If None, uses default configuration.
         """
-        # Prevent re-initialization
+        # If already initialized, update config if provided
         if hasattr(self, "_initialized"):
+            if config is not None:
+                self.update_config(config)
             return
 
         self.config = config or HookletLoggerConfig()
         self.logger = logging.getLogger("hooklet")
-        self.performance_logger = logging.getLogger("hooklet.performance")
+        # Store original rotation settings for child logger copying
+        self._original_rotation_when = "M"
+        self._original_rotation_interval = 1
         self._setup_logger()
         self._initialized = True
 
@@ -198,34 +147,19 @@ class HookletLogger:
         # Set log level
         self.logger.setLevel(self.config.level)
 
-        # Create formatters
-        standard_formatter = self._create_formatter()
-        performance_formatter = PerformanceFormatter(standard_formatter)
+        # Create formatter
+        formatter = self._create_formatter()
 
-        # Create handlers
+        # Create console handler
         console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(standard_formatter)
+        console_handler.setFormatter(formatter)
 
-        perf_handler = logging.StreamHandler(sys.stdout)
-        perf_handler.setFormatter(performance_formatter)
-
-        # Set filters to separate performance logs
-        def is_performance_log(record):
-            return hasattr(record, "event")
-
-        def is_standard_log(record):
-            return not hasattr(record, "event")
-
-        console_handler.addFilter(is_standard_log)
-        perf_handler.addFilter(is_performance_log)
-
-        # Add handlers
+        # Add console handler
         self.logger.addHandler(console_handler)
-        self.logger.addHandler(perf_handler)
 
         # Add file handler if log_file is specified
         if self.config.log_file:
-            file_handler = self._create_file_handler(standard_formatter)
+            file_handler = self._create_file_handler(formatter)
             self.logger.addHandler(file_handler)
 
         # Disable propagation to avoid duplicate logs
@@ -257,14 +191,30 @@ class HookletLogger:
     def _create_file_handler(self, formatter: logging.Formatter) -> logging.Handler:
         """Create file handler."""
         # Ensure log directory exists
+        if self.config.log_file is None:
+            raise ValueError("log_file cannot be None when creating file handler")
+
         log_path = Path(self.config.log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        handler = logging.FileHandler(self.config.log_file, encoding="utf-8")
+        if self.config.rotation:
+            # Use TimedRotatingFileHandler for midnight rotation
+            handler: logging.Handler = logging.handlers.TimedRotatingFileHandler(
+                self.config.log_file,
+                when="midnight",
+                interval=1,
+                backupCount=self.config.max_backup,
+                encoding="utf-8",
+            )
+
+        else:
+            # Use regular FileHandler for no rotation
+            handler = logging.FileHandler(self.config.log_file, encoding="utf-8")
+
         handler.setFormatter(formatter)
         return handler
 
-    def get_logger(self, name: str = None) -> logging.Logger:
+    def get_logger(self, name: str | None = None) -> logging.Logger:
         """Get a logger instance.
 
         Args:
@@ -275,7 +225,51 @@ class HookletLogger:
         """
         if name is None:
             return self.logger
-        return logging.getLogger(f"hooklet.{name}")
+
+        # Get the child logger
+        child_logger = logging.getLogger(f"hooklet.{name}")
+
+        # Ensure child logger inherits handlers from parent
+        if not child_logger.handlers:
+            # Copy handlers from the main logger
+            for handler in self.logger.handlers:
+                # Create a copy of the handler to avoid sharing the same instance
+                if isinstance(handler, logging.StreamHandler) and not isinstance(
+                    handler, logging.FileHandler
+                ):
+                    new_handler: logging.Handler = logging.StreamHandler(handler.stream)
+                elif isinstance(handler, logging.handlers.TimedRotatingFileHandler):
+                    # Use original configuration values to avoid double conversion
+                    when = self._original_rotation_when
+                    interval = self._original_rotation_interval
+                    new_handler = logging.handlers.TimedRotatingFileHandler(
+                        handler.baseFilename,
+                        when=when,
+                        interval=interval,
+                        backupCount=handler.backupCount,
+                        encoding=handler.encoding,
+                    )
+                elif isinstance(handler, logging.FileHandler):
+                    new_handler = logging.FileHandler(
+                        handler.baseFilename, encoding=handler.encoding
+                    )
+                else:
+                    # For other handler types, try to copy them
+                    new_handler = type(handler)()
+
+                # Copy formatter and filters
+                if handler.formatter:
+                    new_handler.setFormatter(handler.formatter)
+                for filter_obj in handler.filters:
+                    new_handler.addFilter(filter_obj)
+
+                child_logger.addHandler(new_handler)
+
+            # Set the same level as parent
+            child_logger.setLevel(self.logger.level)
+            child_logger.propagate = False
+
+        return child_logger
 
     def log_with_extra(self, level: int, message: str, **extra_fields):
         """Log message with extra fields.
@@ -287,86 +281,10 @@ class HookletLogger:
         """
         record = self.logger.makeRecord(self.logger.name, level, "", 0, message, (), exc_info=None)
         if extra_fields:
-            record.extra_fields = {**self.config.extra_fields, **extra_fields}
+            setattr(record, "extra_fields", {**self.config.extra_fields, **extra_fields})
         else:
-            record.extra_fields = self.config.extra_fields
+            setattr(record, "extra_fields", self.config.extra_fields)
         self.logger.handle(record)
-
-    @contextmanager
-    def performance_context(self, operation: str, **extra_fields):
-        """Context manager for performance logging.
-
-        Args:
-            operation: Name of the operation being measured
-            **extra_fields: Additional fields to log
-        """
-        if not self.config.enable_performance_logging:
-            yield
-            return
-
-        start_time = datetime.now()
-
-        # Create a record for start event
-        start_record = self.logger.makeRecord(
-            self.logger.name,
-            logging.INFO,
-            "performance",
-            0,
-            "Performance measurement",
-            (),
-            exc_info=None,
-        )
-        start_record.funcName = "performance_context"
-        start_record.operation = operation
-        start_record.event = "start"
-        for key, value in extra_fields.items():
-            setattr(start_record, key, value)
-        self.logger.handle(start_record)
-
-        try:
-            yield
-            duration = (datetime.now() - start_time).total_seconds()
-
-            # Create a record for completion event
-            complete_record = self.logger.makeRecord(
-                self.logger.name,
-                logging.INFO,
-                "performance",
-                0,
-                "Performance measurement",
-                (),
-                exc_info=None,
-            )
-            complete_record.funcName = "performance_context"
-            complete_record.operation = operation
-            complete_record.event = "complete"
-            complete_record.duration = duration
-            for key, value in extra_fields.items():
-                setattr(complete_record, key, value)
-            self.logger.handle(complete_record)
-
-        except Exception as e:
-            duration = (datetime.now() - start_time).total_seconds()
-
-            # Create a record for error event
-            error_record = self.logger.makeRecord(
-                self.logger.name,
-                logging.ERROR,
-                "performance",
-                0,
-                "Performance measurement",
-                (),
-                exc_info=None,
-            )
-            error_record.funcName = "performance_context"
-            error_record.operation = operation
-            error_record.event = "error"
-            error_record.duration = duration
-            error_record.error = str(e)
-            for key, value in extra_fields.items():
-                setattr(error_record, key, value)
-            self.logger.handle(error_record)
-            raise
 
     def update_config(self, new_config: HookletLoggerConfig):
         """Update logger configuration.
@@ -384,7 +302,6 @@ class HookletLogger:
             handler: Custom logging handler
         """
         self.logger.addHandler(handler)
-        self.performance_logger.addHandler(handler)
 
     def remove_handler(self, handler: logging.Handler):
         """Remove a handler from the logger.
@@ -393,11 +310,10 @@ class HookletLogger:
             handler: Handler to remove
         """
         self.logger.removeHandler(handler)
-        self.performance_logger.removeHandler(handler)
 
 
 # Convenience functions for easy logging
-def get_logger(name: str = None) -> logging.Logger:
+def get_logger(name: str | None = None) -> logging.Logger:
     """Get a logger instance.
 
     Args:
@@ -425,7 +341,8 @@ def setup_default_logging(
     level: Union[LogLevel, str, int] = LogLevel.INFO,
     log_file: Optional[str] = None,
     format_type: LogFormat = LogFormat.DETAILED,
-    enable_performance_logging: bool = False,
+    rotation: bool = False,
+    max_backup: int = 5,
 ):
     """Set up default logging configuration.
 
@@ -433,42 +350,14 @@ def setup_default_logging(
         level: Logging level
         log_file: Optional path to log file
         format_type: Format type for log messages
-        enable_performance_logging: Whether to enable performance logging
+        rotation: Enable log rotation at midnight
+        max_backup: Maximum number of backup files to keep
     """
     config = HookletLoggerConfig(
         level=level,
         log_file=log_file,
         format_type=format_type,
-        enable_performance_logging=enable_performance_logging,
+        rotation=rotation,
+        max_backup=max_backup,
     )
     configure_logging(config)
-
-
-# Performance logging decorator
-def log_performance(operation: str = None):
-    """Decorator for automatic performance logging.
-
-    Args:
-        operation: Operation name (defaults to function name)
-    """
-
-    def decorator(func):
-        def sync_wrapper(*args, **kwargs):
-            op_name = operation or func.__name__
-            # Get the singleton instance that was configured
-            logger = HookletLogger()._instance
-            with logger.performance_context(op_name):
-                return func(*args, **kwargs)
-
-        async def async_wrapper(*args, **kwargs):
-            op_name = operation or func.__name__
-            # Get the singleton instance that was configured
-            logger = HookletLogger()._instance
-            with logger.performance_context(op_name):
-                return await func(*args, **kwargs)
-
-        if asyncio.iscoroutinefunction(func):
-            return async_wrapper
-        return sync_wrapper
-
-    return decorator

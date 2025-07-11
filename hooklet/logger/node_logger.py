@@ -6,7 +6,7 @@ Each Eventrix instance gets its own logger with executor_id included in all mess
 """
 
 import logging
-from typing import Optional
+from typing import Any, MutableMapping, Optional
 
 from .hooklet_logger import HookletLogger, HookletLoggerConfig
 
@@ -24,7 +24,9 @@ class NodeLoggerAdapter(logging.LoggerAdapter):
         super().__init__(logger, {"node_name": node_name})
         self.node_name = node_name
 
-    def process(self, msg: str, kwargs: dict) -> tuple[str, dict]:
+    def process(
+        self, msg: str, kwargs: MutableMapping[str, Any]
+    ) -> tuple[str, MutableMapping[str, Any]]:
         """Process the log message to include executor context.
 
         Args:

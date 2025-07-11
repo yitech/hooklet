@@ -95,14 +95,14 @@ class NatsReqReply(ReqReply):
         try:
             response = await self._pilot._nats_client.request(subject, payload, timeout=timeout)
             return Reply.model_validate_json(response.data.decode())
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"Request to {subject} timed out after {timeout} seconds")
+        except asyncio.TimeoutError as exc:
+            raise TimeoutError(f"Request to {subject} timed out after {timeout} seconds") from exc
         except Exception as e:
             raise e
 
     async def register_callback(
         self, subject: str, callback: Callable[[Req], Awaitable[Reply]]
-    ) -> str:
+    ) -> None:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
 
@@ -122,9 +122,8 @@ class NatsReqReply(ReqReply):
         self._callbacks[subject] = callback
         self._nats_subscriptions[subject] = sub
         logger.info(f"Registered callback for {subject}")
-        return subject
 
-    async def unregister_callback(self, subject: str) -> None:
+    async def unregister_callback(self, subject: str) -> bool:
         if subject in self._callbacks:
             if subject in self._nats_subscriptions:
                 sub = self._nats_subscriptions[subject]
@@ -132,6 +131,8 @@ class NatsReqReply(ReqReply):
                 del self._nats_subscriptions[subject]
             del self._callbacks[subject]
             logger.info(f"Unregistered callback for {subject}")
+            return True
+        return False
 
     async def _cleanup(self) -> None:
         for subject in list(self._callbacks.keys()):

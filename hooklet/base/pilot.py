@@ -50,7 +50,7 @@ class ReqReply(ABC):
         raise NotImplementedError("Subclasses must implement register_callback()")
 
     @abstractmethod
-    async def unregister_callback(self, subject: str, callback_id: int) -> bool:
+    async def unregister_callback(self, subject: str) -> bool:
         """
         Unregister a callback for a specific subject.
         """
