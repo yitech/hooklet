@@ -72,6 +72,8 @@ class HookletLoggerConfig:
         level: Union[LogLevel, str, int] = LogLevel.INFO,
         format_type: LogFormat = LogFormat.DETAILED,
         log_file: Optional[str] = None,
+        rotation: bool = False,
+        max_backup: int = 5,
         extra_fields: Optional[Dict[str, Any]] = None,
     ):
         """Initialize logger configuration.
@@ -80,11 +82,15 @@ class HookletLoggerConfig:
             level: Logging level (LogLevel enum, string, or int)
             format_type: Format type for log messages
             log_file: Optional path to log file for additional file output
+            rotation: Enable log rotation at midnight
+            max_backup: Maximum number of backup files to keep
             extra_fields: Additional fields to include in all log messages
         """
         self.level = self._normalize_level(level)
         self.format_type = format_type
         self.log_file = log_file
+        self.rotation = rotation
+        self.max_backup = max_backup
         self.extra_fields = extra_fields or {}
 
         # Validate configuration
@@ -134,6 +140,9 @@ class HookletLogger:
 
         self.config = config or HookletLoggerConfig()
         self.logger = logging.getLogger("hooklet")
+        # Store original rotation settings for child logger copying
+        self._original_rotation_when = "M"
+        self._original_rotation_interval = 1
         self._setup_logger()
         self._initialized = True
 
@@ -195,7 +204,20 @@ class HookletLogger:
         log_path = Path(self.config.log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        handler = logging.FileHandler(self.config.log_file, encoding="utf-8")
+        if self.config.rotation:
+            # Use TimedRotatingFileHandler for midnight rotation
+            handler = logging.handlers.TimedRotatingFileHandler(
+                self.config.log_file,
+                when="midnight",
+                interval=1,
+                backupCount=self.config.max_backup,
+                encoding="utf-8"
+            )
+
+        else:
+            # Use regular FileHandler for no rotation
+            handler = logging.FileHandler(self.config.log_file, encoding="utf-8")
+        
         handler.setFormatter(formatter)
         return handler
 
@@ -219,8 +241,19 @@ class HookletLogger:
             # Copy handlers from the main logger
             for handler in self.logger.handlers:
                 # Create a copy of the handler to avoid sharing the same instance
-                if isinstance(handler, logging.StreamHandler):
+                if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
                     new_handler = logging.StreamHandler(handler.stream)
+                elif isinstance(handler, logging.handlers.TimedRotatingFileHandler):
+                    # Use original configuration values to avoid double conversion
+                    when = self._original_rotation_when
+                    interval = self._original_rotation_interval
+                    new_handler = logging.handlers.TimedRotatingFileHandler(
+                        handler.baseFilename,
+                        when=when,
+                        interval=interval,
+                        backupCount=handler.backupCount,
+                        encoding=handler.encoding
+                    )
                 elif isinstance(handler, logging.FileHandler):
                     new_handler = logging.FileHandler(handler.baseFilename, encoding=handler.encoding)
                 else:
@@ -311,6 +344,8 @@ def setup_default_logging(
     level: Union[LogLevel, str, int] = LogLevel.INFO,
     log_file: Optional[str] = None,
     format_type: LogFormat = LogFormat.DETAILED,
+    rotation: bool = False,
+    max_backup: int = 5,
 ):
     """Set up default logging configuration.
 
@@ -318,10 +353,14 @@ def setup_default_logging(
         level: Logging level
         log_file: Optional path to log file
         format_type: Format type for log messages
+        rotation: Enable log rotation at midnight
+        max_backup: Maximum number of backup files to keep
     """
     config = HookletLoggerConfig(
         level=level,
         log_file=log_file,
         format_type=format_type,
+        rotation=rotation,
+        max_backup=max_backup,
     )
     configure_logging(config)
