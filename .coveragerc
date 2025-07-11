@@ -1,6 +1,7 @@
 [run]
 omit = 
     */hooklet/logger/*
+    */hooklet/base/*
     */tests/*
     */venv/*
     */examples/*
@@ -8,6 +9,7 @@ omit =
 [report]
 omit = 
     */hooklet/logger/*
+    */hooklet/base/*
     */tests/*
     */venv/*
     */examples/* 
