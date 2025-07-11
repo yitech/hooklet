@@ -3,7 +3,6 @@ ignore=CVS,__pycache__,.git,venv,dist,build
 
 [MESSAGES CONTROL]
 disable=
-    C0103, # variable-name (snake_case naming style)
     C0111, # missing-docstring
     C1801, # len-as-condition
     R0903, # too-few-public-methods
