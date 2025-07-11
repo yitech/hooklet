@@ -218,7 +218,7 @@ class TestInprocReqReply:
         subject = "test.subject"
         result = await reqreply.register_callback(subject, mock_callback)
         
-        assert result == subject
+        assert result is None  # register_callback returns None to match base interface
         assert reqreply._callbacks[subject] == mock_callback
 
     @pytest.mark.asyncio

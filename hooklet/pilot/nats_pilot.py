@@ -102,7 +102,7 @@ class NatsReqReply(ReqReply):
 
     async def register_callback(
         self, subject: str, callback: Callable[[Req], Awaitable[Reply]]
-    ) -> str:
+    ) -> None:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
 
@@ -122,9 +122,8 @@ class NatsReqReply(ReqReply):
         self._callbacks[subject] = callback
         self._nats_subscriptions[subject] = sub
         logger.info(f"Registered callback for {subject}")
-        return subject
 
-    async def unregister_callback(self, subject: str) -> None:
+    async def unregister_callback(self, subject: str) -> bool:
         if subject in self._callbacks:
             if subject in self._nats_subscriptions:
                 sub = self._nats_subscriptions[subject]
@@ -132,6 +131,8 @@ class NatsReqReply(ReqReply):
                 del self._nats_subscriptions[subject]
             del self._callbacks[subject]
             logger.info(f"Unregistered callback for {subject}")
+            return True
+        return False
 
     async def _cleanup(self) -> None:
         for subject in list(self._callbacks.keys()):

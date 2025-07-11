@@ -103,8 +103,8 @@ async def test_nats_pilot_reqreply():
                 end_ms=current_time
             )
         
-        subject = await reqreply.register_callback("echo.service", echo_callback)
-        assert subject == "echo.service"
+        await reqreply.register_callback("echo.service", echo_callback)
+        # No assertion on return value
         
         # Make a request
         request_msg = Req(type="echo", params={"data": "hello world"})

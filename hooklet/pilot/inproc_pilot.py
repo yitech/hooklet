@@ -49,27 +49,33 @@ class InprocPubSub(PubSub):
 
 class InprocReqReply(ReqReply):
     def __init__(self) -> None:
-        self._callbacks: Dict[str, Callable[[Any], Awaitable[Any]]] = {}
+        self._callbacks: Dict[str, Callable[[Req], Awaitable[Reply]]] = {}
 
     async def request(self, subject: str, data: Req, timeout: float = 10.0) -> Reply:
         if subject not in self._callbacks:
             raise ValueError(f"No callback registered for {subject}")
         try:
-            return await asyncio.wait_for(self._callbacks[subject](data), timeout=timeout)
+            result = await asyncio.wait_for(self._callbacks[subject](data), timeout=timeout)
+            return result
         except asyncio.TimeoutError:
-            return Reply(error="Timeout")
+            start_ms = int(time.time() * 1000)
+            end_ms = int(time.time() * 1000)
+            return Reply(type="error", result=None, error="Timeout", start_ms=start_ms, end_ms=end_ms)
         except Exception as e:
-            return Reply(error=str(e))
+            start_ms = int(time.time() * 1000)
+            end_ms = int(time.time() * 1000)
+            return Reply(type="error", result=None, error=str(e), start_ms=start_ms, end_ms=end_ms)
 
     async def register_callback(
-        self, subject: str, callback: Callable[[Any], Awaitable[Any]]
-    ) -> str:
+        self, subject: str, callback: Callable[[Req], Awaitable[Reply]]
+    ) -> None:
         self._callbacks[subject] = callback
-        return subject
 
-    async def unregister_callback(self, subject: str) -> None:
+    async def unregister_callback(self, subject: str) -> bool:
         if subject in self._callbacks:
             del self._callbacks[subject]
+            return True
+        return False
 
 
 class InprocPushPull(PushPull):
@@ -150,37 +156,45 @@ class SimplePushPull:
 
     async def _worker_loop(self, callback: Callable[[Job], Awaitable[Any]]) -> None:
         while not self._shutdown_event.is_set():
-            done, pending = await asyncio.wait(
-                [
-                    asyncio.create_task(self._job_queue.get()),
-                    asyncio.create_task(self._shutdown_event.wait()),
-                ],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            for task in pending:
-                task.cancel()
-            if self._shutdown_event.is_set():
-                break
-            # Get the first (and only) completed task from the done set
-            completed_task = next(iter(done))
-            job = completed_task.result()
-            job.start_ms = int(time.time() * 1000)
-            job.status = "running"
-            await self._notify_subscriptions(job)
             try:
-                await callback(job)
-                job.end_ms = int(time.time() * 1000)
-                job.status = "finished"
-                await self._notify_subscriptions(job)
-            except asyncio.CancelledError:
-                job.end_ms = int(time.time() * 1000)
-                job.status = "cancelled"
+                # Wait for either a job or shutdown signal
+                job_task = asyncio.create_task(self._job_queue.get())
+                shutdown_task = asyncio.create_task(self._shutdown_event.wait())
+                
+                done, pending = await asyncio.wait(
+                    [job_task, shutdown_task],
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                
+                for task in pending:
+                    task.cancel()
+                    
+                if shutdown_task in done:
+                    break
+                    
+                if job_task in done:
+                    job: Job = job_task.result()
+                    job.start_ms = int(time.time() * 1000)
+                    job.status = "running"
+                    await self._notify_subscriptions(job)
+                    try:
+                        await callback(job)
+                        job.end_ms = int(time.time() * 1000)
+                        job.status = "finished"
+                        await self._notify_subscriptions(job)
+                    except asyncio.CancelledError:
+                        job.end_ms = int(time.time() * 1000)
+                        job.status = "cancelled"
+                        await self._notify_subscriptions(job)
+                    except Exception as e:
+                        logger.error(f"Error in worker loop for {self.subject}: {e}")
+                        job.end_ms = int(time.time() * 1000)
+                        job.status = "failed"
+                        job.error = str(e)
+                        await self._notify_subscriptions(job)
+                        
             except Exception as e:
                 logger.error(f"Error in worker loop for {self.subject}: {e}")
-                job.end_ms = int(time.time() * 1000)
-                job.status = "failed"
-                job.error = str(e)
-                await self._notify_subscriptions(job)
 
         logger.info(f"Worker loop for {self.subject} shutdown")
 
