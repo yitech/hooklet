@@ -134,7 +134,7 @@ class HookletLogger:
         self.config = config or HookletLoggerConfig()
         self.logger = logging.getLogger("hooklet")
         # Store original rotation settings for child logger copying
-        self._original_rotation_when = "M"
+        self._original_rotation_when = "midnight"
         self._original_rotation_interval = 1
         self._setup_logger()
         self._initialized = True
