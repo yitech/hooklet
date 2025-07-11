@@ -1,0 +1,13 @@
+[run]
+omit = 
+    */hooklet/logger/*
+    */tests/*
+    */venv/*
+    */examples/*
+
+[report]
+omit = 
+    */hooklet/logger/*
+    */tests/*
+    */venv/*
+    */examples/* 
