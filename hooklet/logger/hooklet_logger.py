@@ -200,7 +200,7 @@ class HookletLogger:
         # Ensure log directory exists
         if self.config.log_file is None:
             raise ValueError("log_file cannot be None when creating file handler")
-        
+
         log_path = Path(self.config.log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -211,17 +211,17 @@ class HookletLogger:
                 when="midnight",
                 interval=1,
                 backupCount=self.config.max_backup,
-                encoding="utf-8"
+                encoding="utf-8",
             )
 
         else:
             # Use regular FileHandler for no rotation
             handler = logging.FileHandler(self.config.log_file, encoding="utf-8")
-        
+
         handler.setFormatter(formatter)
         return handler
 
-    def get_logger(self, name: str|None = None) -> logging.Logger:
+    def get_logger(self, name: str | None = None) -> logging.Logger:
         """Get a logger instance.
 
         Args:
@@ -232,16 +232,18 @@ class HookletLogger:
         """
         if name is None:
             return self.logger
-        
+
         # Get the child logger
         child_logger = logging.getLogger(f"hooklet.{name}")
-        
+
         # Ensure child logger inherits handlers from parent
         if not child_logger.handlers:
             # Copy handlers from the main logger
             for handler in self.logger.handlers:
                 # Create a copy of the handler to avoid sharing the same instance
-                if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+                if isinstance(handler, logging.StreamHandler) and not isinstance(
+                    handler, logging.FileHandler
+                ):
                     new_handler = logging.StreamHandler(handler.stream)
                 elif isinstance(handler, logging.handlers.TimedRotatingFileHandler):
                     # Use original configuration values to avoid double conversion
@@ -252,26 +254,28 @@ class HookletLogger:
                         when=when,
                         interval=interval,
                         backupCount=handler.backupCount,
-                        encoding=handler.encoding
+                        encoding=handler.encoding,
                     )
                 elif isinstance(handler, logging.FileHandler):
-                    new_handler = logging.FileHandler(handler.baseFilename, encoding=handler.encoding)
+                    new_handler = logging.FileHandler(
+                        handler.baseFilename, encoding=handler.encoding
+                    )
                 else:
                     # For other handler types, try to copy them
                     new_handler = type(handler)()
-                
+
                 # Copy formatter and filters
                 if handler.formatter:
                     new_handler.setFormatter(handler.formatter)
                 for filter_obj in handler.filters:
                     new_handler.addFilter(filter_obj)
-                
+
                 child_logger.addHandler(new_handler)
-            
+
             # Set the same level as parent
             child_logger.setLevel(self.logger.level)
             child_logger.propagate = False
-        
+
         return child_logger
 
     def log_with_extra(self, level: int, message: str, **extra_fields):
@@ -316,7 +320,7 @@ class HookletLogger:
 
 
 # Convenience functions for easy logging
-def get_logger(name: str|None = None) -> logging.Logger:
+def get_logger(name: str | None = None) -> logging.Logger:
     """Get a logger instance.
 
     Args:
