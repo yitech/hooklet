@@ -58,8 +58,9 @@ class JSONFormatter(logging.Formatter):
             log_entry["exception"] = self.formatException(record.exc_info)
 
         # Add extra fields if present
-        if hasattr(record, "extra_fields"):
-            log_entry.update(record.extra_fields)
+        extra_fields = getattr(record, "extra_fields", None)
+        if extra_fields:
+            log_entry.update(extra_fields)
 
         return json.dumps(log_entry, ensure_ascii=False)
 
@@ -101,7 +102,7 @@ class HookletLoggerConfig:
         if isinstance(level, LogLevel):
             return level.value
         if isinstance(level, str):
-            return getattr(logging, level.upper())
+            return getattr(logging, level.upper(), logging.INFO)
         if isinstance(level, int):
             return level
         raise ValueError(f"Invalid log level: {level}")
@@ -206,7 +207,7 @@ class HookletLogger:
 
         if self.config.rotation:
             # Use TimedRotatingFileHandler for midnight rotation
-            handler = logging.handlers.TimedRotatingFileHandler(
+            handler: logging.Handler = logging.handlers.TimedRotatingFileHandler(
                 self.config.log_file,
                 when="midnight",
                 interval=1,
@@ -244,7 +245,7 @@ class HookletLogger:
                 if isinstance(handler, logging.StreamHandler) and not isinstance(
                     handler, logging.FileHandler
                 ):
-                    new_handler = logging.StreamHandler(handler.stream)
+                    new_handler: logging.Handler = logging.StreamHandler(handler.stream)
                 elif isinstance(handler, logging.handlers.TimedRotatingFileHandler):
                     # Use original configuration values to avoid double conversion
                     when = self._original_rotation_when
@@ -288,9 +289,9 @@ class HookletLogger:
         """
         record = self.logger.makeRecord(self.logger.name, level, "", 0, message, (), exc_info=None)
         if extra_fields:
-            record.extra_fields = {**self.config.extra_fields, **extra_fields}
+            setattr(record, "extra_fields", {**self.config.extra_fields, **extra_fields})
         else:
-            record.extra_fields = self.config.extra_fields
+            setattr(record, "extra_fields", self.config.extra_fields)
         self.logger.handle(record)
 
     def update_config(self, new_config: HookletLoggerConfig):
