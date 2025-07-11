@@ -118,7 +118,6 @@ class HookletLoggerConfig:
         level: Union[LogLevel, str, int] = LogLevel.INFO,
         format_type: LogFormat = LogFormat.DETAILED,
         log_file: Optional[str] = None,
-        enable_async_context: bool = True,
         enable_performance_logging: bool = False,
         extra_fields: Optional[Dict[str, Any]] = None,
     ):
@@ -128,14 +127,12 @@ class HookletLoggerConfig:
             level: Logging level (LogLevel enum, string, or int)
             format_type: Format type for log messages
             log_file: Optional path to log file for additional file output
-            enable_async_context: Include async context in logs
             enable_performance_logging: Enable performance metrics
             extra_fields: Additional fields to include in all log messages
         """
         self.level = self._normalize_level(level)
         self.format_type = format_type
         self.log_file = log_file
-        self.enable_async_context = enable_async_context
         self.enable_performance_logging = enable_performance_logging
         self.extra_fields = extra_fields or {}
 
@@ -154,10 +151,8 @@ class HookletLoggerConfig:
 
     def _validate(self):
         """Validate configuration parameters."""
-        if self.log_file:
-            log_path = Path(self.log_file)
-            if not log_path.parent.exists():
-                raise ValueError(f"Log directory does not exist: {log_path.parent}")
+        # Directory validation removed - the file handler will create directories as needed
+        pass
 
 
 class HookletLogger:

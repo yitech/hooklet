@@ -92,7 +92,6 @@ hooklet_logger.log_with_extra(
 | `log_file` | `str \| None` | `None` | Path to log file (required for file destinations) |
 | `max_file_size` | `int` | `10MB` | Maximum log file size before rotation |
 | `backup_count` | `int` | `5` | Number of backup files to keep |
-| `enable_async_context` | `bool` | `True` | Include async task/thread information |
 | `enable_performance_logging` | `bool` | `False` | Enable performance monitoring |
 | `custom_format` | `str \| None` | `None` | Custom format string (when format_type is CUSTOM) |
 | `extra_fields` | `dict \| None` | `None` | Additional fields to include in all log messages |
@@ -173,7 +172,7 @@ import asyncio
 from hooklet.logger import HookletLoggerConfig, HookletLogger
 
 async def async_worker(worker_id):
-    config = HookletLoggerConfig(enable_async_context=True)
+    config = HookletLoggerConfig()
     hooklet_logger = HookletLogger(config)
     logger = hooklet_logger.get_logger("worker")
     
@@ -253,7 +252,6 @@ hooklet_logger.add_handler(custom_handler)
 4. **Structured Logging**: Use JSON format and extra fields for machine-readable logs
 5. **Performance Monitoring**: Enable performance logging for critical operations
 6. **File Rotation**: Configure appropriate file sizes and backup counts for file logging
-7. **Async Context**: Enable async context information for better debugging in async applications
 
 ## Examples
 
