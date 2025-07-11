@@ -1,4 +1,4 @@
-# Hooklet v3
+# Hooklet
 [![codecov](https://codecov.io/gh/yitech/hooklet/graph/badge.svg?token=3kf2NZNMKe)](https://codecov.io/gh/yitech/hooklet)
 
 
