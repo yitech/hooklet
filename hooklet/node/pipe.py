@@ -19,9 +19,9 @@ class Pipe(Node, ABC):
 
     async def on_start(self):
         async def on_pipe_message(in_msg: Msg):
-            async with aclosing(self.on_message(in_msg)) as gen:
+            async with aclosing(self.on_message(in_msg)) as gen: # type: ignore[type-var]
                 try:
-                    async for out_msg in gen:
+                    async for out_msg in gen: # type: ignore[attr-defined]
                         subject = self.router(out_msg)
                         await self.pubsub.publish(subject, out_msg)
                 except Exception as e:

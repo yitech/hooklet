@@ -36,18 +36,18 @@ class Emitter(Node, ABC):
 
     async def on_close(self):
         self.shutdown_event.set()
-        try:
-            await asyncio.wait_for(self.task, timeout=2)
-        except asyncio.TimeoutError:
-            self.task.cancel()
-            await self.task
-        finally:
-            self.task = None
+        if self.task is not None:
+            try:
+                await asyncio.wait_for(self.task, timeout=2)
+            except asyncio.TimeoutError:
+                self.task.cancel()
+                await self.task
+        self.task = None
 
     async def run(self):
         try:
-            async with aclosing(self.emit()) as gen:
-                async for msg in gen:
+            async with aclosing(self.emit()) as gen: # type: ignore[type-var]
+                async for msg in gen: # type: ignore[attr-defined]
                     if self.shutdown_event.is_set():
                         break
                     subject = self.router(msg)
