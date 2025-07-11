@@ -175,8 +175,10 @@ class HookletLogger:
         Args:
             config: Logger configuration. If None, uses default configuration.
         """
-        # Prevent re-initialization
+        # If already initialized, update config if provided
         if hasattr(self, "_initialized"):
+            if config is not None:
+                self.update_config(config)
             return
 
         self.config = config or HookletLoggerConfig()
@@ -252,6 +254,9 @@ class HookletLogger:
     def _create_file_handler(self, formatter: logging.Formatter) -> logging.Handler:
         """Create file handler."""
         # Ensure log directory exists
+        if self.config.log_file is None:
+            raise ValueError("log_file cannot be None when creating file handler")
+        
         log_path = Path(self.config.log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -259,7 +264,7 @@ class HookletLogger:
         handler.setFormatter(formatter)
         return handler
 
-    def get_logger(self, name: str = None) -> logging.Logger:
+    def get_logger(self, name: str|None = None) -> logging.Logger:
         """Get a logger instance.
 
         Args:
@@ -270,7 +275,36 @@ class HookletLogger:
         """
         if name is None:
             return self.logger
-        return logging.getLogger(f"hooklet.{name}")
+        
+        # Get the child logger
+        child_logger = logging.getLogger(f"hooklet.{name}")
+        
+        # Ensure child logger inherits handlers from parent
+        if not child_logger.handlers:
+            # Copy handlers from the main logger
+            for handler in self.logger.handlers:
+                # Create a copy of the handler to avoid sharing the same instance
+                if isinstance(handler, logging.StreamHandler):
+                    new_handler = logging.StreamHandler(handler.stream)
+                elif isinstance(handler, logging.FileHandler):
+                    new_handler = logging.FileHandler(handler.baseFilename, encoding=handler.encoding)
+                else:
+                    # For other handler types, try to copy them
+                    new_handler = type(handler)()
+                
+                # Copy formatter and filters
+                if handler.formatter:
+                    new_handler.setFormatter(handler.formatter)
+                for filter_obj in handler.filters:
+                    new_handler.addFilter(filter_obj)
+                
+                child_logger.addHandler(new_handler)
+            
+            # Set the same level as parent
+            child_logger.setLevel(self.logger.level)
+            child_logger.propagate = False
+        
+        return child_logger
 
     def log_with_extra(self, level: int, message: str, **extra_fields):
         """Log message with extra fields.
@@ -288,7 +322,7 @@ class HookletLogger:
         self.logger.handle(record)
 
     @contextmanager
-    def performance_context(self, operation: str, **extra_fields):
+    def performance_context(self, operation: str|None = None, **extra_fields):
         """Context manager for performance logging.
 
         Args:
@@ -392,7 +426,7 @@ class HookletLogger:
 
 
 # Convenience functions for easy logging
-def get_logger(name: str = None) -> logging.Logger:
+def get_logger(name: str|None = None) -> logging.Logger:
     """Get a logger instance.
 
     Args:
@@ -440,7 +474,7 @@ def setup_default_logging(
 
 
 # Performance logging decorator
-def log_performance(operation: str = None):
+def log_performance(operation: str|None = None):
     """Decorator for automatic performance logging.
 
     Args:
