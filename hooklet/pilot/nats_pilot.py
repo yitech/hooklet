@@ -1,8 +1,8 @@
 import asyncio
 import json
 import time
-from functools import lru_cache
-from typing import Any, Awaitable, Callable, Dict
+from functools import lru_cache, wraps
+from typing import Any, Awaitable, Callable, Dict, Set
 
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg as NatsMsg
@@ -13,6 +13,33 @@ from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, Reply, Req, ReqReply
 from hooklet.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def async_once(func):
+    """Decorator that ensures an async function is called only once per set of arguments."""
+    called = set()
+    locks = {}
+
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        # Create a cache key from args and kwargs
+        key = (args, tuple(sorted(kwargs.items())))
+
+        if key in called:
+            return
+
+        # Use a lock to prevent concurrent calls with the same arguments
+        if key not in locks:
+            locks[key] = asyncio.Lock()
+
+        async with locks[key]:
+            if key in called:
+                return
+            result = await func(*args, **kwargs)
+            called.add(key)
+            return result
+
+    return wrapper
 
 
 class NatsPubSub(PubSub):
@@ -153,7 +180,7 @@ class NatsPushPull(PushPull):
         js_context = pilot._nats_client.jetstream()
         return cls(pilot, js_context)
 
-    @lru_cache(maxsize=1000)
+    @lru_cache(maxsize=10)
     def stream_name(self, subject: str) -> str:
         return subject.upper().replace(".", "-")
 
@@ -169,6 +196,7 @@ class NatsPushPull(PushPull):
     def job_subject(self, subject: str) -> str:
         return f"{subject}.job"
 
+    @async_once
     async def _ensure_stream(self, subject: str) -> None:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
@@ -196,6 +224,7 @@ class NatsPushPull(PushPull):
         )
         logger.info(f"Created JetStream stream: {self.stream_name(subject)}")
 
+    @async_once
     async def _ensure_consumer(self, subject: str) -> None:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
@@ -236,11 +265,6 @@ class NatsPushPull(PushPull):
         try:
             await self._ensure_stream(subject)
             await self._ensure_consumer(subject)
-            await self._js.pull_subscribe(
-                stream=self.stream_name(subject),
-                subject=self.job_subject(subject),
-                durable=self.consumer_name(subject),
-            )
             for _ in range(n_workers):
                 self._workers.append(asyncio.create_task(self._worker_loop(subject, callback)))
             logger.info(f"Registered {n_workers} workers for {subject}")
@@ -250,11 +274,11 @@ class NatsPushPull(PushPull):
             raise
 
     async def unregister_worker(self, subject: str) -> None:
-        if subject not in self._nats_subscriptions:
-            return
-        for sub in self._nats_subscriptions[subject]:
-            await sub.unsubscribe()
-        self._nats_subscriptions[subject].clear()
+        self._shutdown_event.set()
+        await asyncio.wait_for(
+            asyncio.gather(*self._workers, return_exceptions=True), timeout=2.0
+            )
+        self._workers.clear()
         logger.info(f"Unregistered workers for {subject}")
 
     async def _worker_loop(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> None:
@@ -315,6 +339,8 @@ class NatsPushPull(PushPull):
         except Exception as e:
             logger.error(f"Error in worker loop for {subject}: {e}", exc_info=True)
             raise
+        finally:
+            await subscription.unsubscribe()
 
     async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
         """Subscribe to job notifications for the specified subject."""
