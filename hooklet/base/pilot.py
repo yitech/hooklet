@@ -76,6 +76,14 @@ class PushPull(ABC):
         raise NotImplementedError("Subclasses must implement register_worker()")
 
     @abstractmethod
+    async def unregister_worker(self, subject: str) -> None:
+        """
+        Unregister a worker for a specific subject.
+        """
+        raise NotImplementedError("Subclasses must implement unregister_worker()")
+
+
+    @abstractmethod
     async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
         """
         Subscribe to a specific subject.

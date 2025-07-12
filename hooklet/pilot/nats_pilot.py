@@ -249,6 +249,14 @@ class NatsPushPull(PushPull):
             logger.error(f"Error registering workers for {subject}: {e}", exc_info=True)
             raise
 
+    async def unregister_worker(self, subject: str) -> None:
+        if subject not in self._nats_subscriptions:
+            return
+        for sub in self._nats_subscriptions[subject]:
+            await sub.unsubscribe()
+        self._nats_subscriptions[subject].clear()
+        logger.info(f"Unregistered workers for {subject}")
+
     async def _worker_loop(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> None:
         try:
             await self._ensure_stream(subject)

@@ -97,6 +97,11 @@ class InprocPushPull(PushPull):
             self._pushpulls[subject] = SimplePushPull(subject, self._pilot)
         await self._pushpulls[subject].register_worker(callback, n_workers)
 
+    async def unregister_worker(self, subject: str) -> None:
+        if subject not in self._pushpulls:
+            return
+        await self._pushpulls[subject].unregister_worker()
+
     async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
         if subject not in self._pushpulls:
             self._pushpulls[subject] = SimplePushPull(subject, self._pilot)
@@ -137,6 +142,14 @@ class SimplePushPull:
         self._shutdown_event.clear()
         for _ in range(n_workers):
             self._worker_loops.append(asyncio.create_task(self._worker_loop(callback)))
+
+    async def unregister_worker(self) -> None:
+        self._shutdown_event.set()
+        await asyncio.gather(
+            *[asyncio.wait_for(task, timeout=2.0) for task in self._worker_loops],
+            return_exceptions=True,
+        )
+        self._worker_loops.clear()
 
     async def subscribe(self, callback: Callable[[Job], Awaitable[Any]]) -> int:
         logger.info(f"Subscribed {id(callback)} to {self.subject}")
@@ -251,13 +264,13 @@ class InprocPilot(Pilot):
         self._job_queues.clear()
         logger.info("InProcPilot disconnected")
 
-    def pubsub(self) -> PubSub:
+    def pubsub(self) -> InprocPubSub:
         return self._pubsub
 
-    def reqreply(self) -> ReqReply:
+    def reqreply(self) -> InprocReqReply:
         return self._reqreply
 
-    def pushpull(self) -> PushPull:
+    def pushpull(self) -> InprocPushPull:
         return self._pushpull
 
     def get_job_queue(self, subject: str) -> asyncio.Queue[Job]:
