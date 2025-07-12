@@ -21,8 +21,10 @@ def suppress_async_mock_warnings():
 async def test_nats_pilot_connection():
     """Test basic connection functionality"""
     pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
+                      connect_timeout=3,
                       allow_reconnect=False,
-                      connect_timeout=5)
+                      reconnect_time_wait=1,
+                      max_reconnect_attempts=1)
     
     # Test initial state
     assert not pilot.is_connected()
@@ -43,8 +45,10 @@ async def test_nats_pilot_connection():
 async def test_nats_pilot_pubsub():
     """Test pub/sub functionality"""
     pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
+                      connect_timeout=3,
                       allow_reconnect=False,
-                      connect_timeout=5)
+                      reconnect_time_wait=1,
+                      max_reconnect_attempts=1)
     
     try:
         await pilot.connect()
@@ -85,8 +89,10 @@ async def test_nats_pilot_pubsub():
 async def test_nats_pilot_reqreply():
     """Test request-reply functionality"""
     pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
+                      connect_timeout=3,
                       allow_reconnect=False,
-                      connect_timeout=5)
+                      reconnect_time_wait=1,
+                      max_reconnect_attempts=1)
     
     try:
         await pilot.connect()
@@ -131,8 +137,10 @@ async def test_nats_pilot_reqreply():
 async def test_nats_pilot_pushpull():
     """Test push-pull functionality with JetStream"""
     pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
+                      connect_timeout=3,
                       allow_reconnect=False,
-                      connect_timeout=5)
+                      reconnect_time_wait=1,
+                      max_reconnect_attempts=1)
     
     try:
         await pilot.connect()
@@ -186,9 +194,10 @@ async def test_nats_pilot_pushpull():
 async def test_nats_pilot_context_manager():
     """Test context manager functionality"""
     pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
+                      connect_timeout=3,
                       allow_reconnect=False,
-                      connect_timeout=5)
-    
+                      reconnect_time_wait=1,
+                      max_reconnect_attempts=1)
     try:
         async with pilot:
             assert pilot.is_connected()
@@ -203,8 +212,10 @@ class TestNatsPilot:
     def pilot(self):
         """Create a fresh NatsPilot instance for each test."""
         return NatsPilot(nats_urls=["nats://localhost:4222"],
-                         allow_reconnect=False,
-                         connect_timeout=5)
+                         connect_timeout=3,
+                      allow_reconnect=False,
+                      reconnect_time_wait=1,
+                      max_reconnect_attempts=1)
 
     @pytest.fixture
     def sample_job(self):
@@ -241,13 +252,17 @@ class TestNatsPilot:
             # Create pilot after patching NATS
             pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
                               allow_reconnect=False,
-                              connect_timeout=5)
+                              connect_timeout=5,
+                              reconnect_time_wait=1,
+                              max_reconnect_attempts=1)
             
             await pilot.connect()
             assert pilot.is_connected()
             mock_nats_client.connect.assert_called_once_with(servers=["nats://localhost:4222"],
                                                             allow_reconnect=False,
-                                                            connect_timeout=5)
+                                                            connect_timeout=5,
+                                                            reconnect_time_wait=1,
+                                                            max_reconnect_attempts=1)
             
             await pilot.disconnect()
             assert not pilot.is_connected()
@@ -268,7 +283,9 @@ class TestNatsPilot:
 
             pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
                               allow_reconnect=False,
-                              connect_timeout=5)
+                              connect_timeout=5,
+                              reconnect_time_wait=1,
+                              max_reconnect_attempts=1)
 
             async with pilot:
                 assert pilot.is_connected()
@@ -749,3 +766,4 @@ class TestNatsPushPull:
         assert subject not in pushpull._workers
         # The tasks should be done (cancelled or finished)
         assert all([t.done() for t in [mock_task1, mock_task2]]) 
+
