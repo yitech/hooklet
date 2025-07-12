@@ -1,18 +1,45 @@
 import asyncio
 import json
 import time
-from functools import lru_cache
+from functools import lru_cache, wraps
 from typing import Any, Awaitable, Callable, Dict
 
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg as NatsMsg
 from nats.aio.subscription import Subscription
-from nats.js import JetStreamContext
+from nats.js import JetStreamContext, api
 
 from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, Reply, Req, ReqReply
 from hooklet.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def async_once(func):
+    """Decorator that ensures an async function is called only once per set of arguments."""
+    called = set()
+    locks = {}
+
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        # Create a cache key from args and kwargs
+        key = (args, tuple(sorted(kwargs.items())))
+
+        if key in called:
+            return
+
+        # Use a lock to prevent concurrent calls with the same arguments
+        if key not in locks:
+            locks[key] = asyncio.Lock()
+
+        async with locks[key]:
+            if key in called:
+                return
+            result = await func(*args, **kwargs)
+            called.add(key)
+            return result
+
+    return wrapper
 
 
 class NatsPubSub(PubSub):
@@ -140,11 +167,11 @@ class NatsReqReply(ReqReply):
 
 
 class NatsPushPull(PushPull):
-    def __init__(self, pilot: "NatsPilot", js_context) -> None:
+    def __init__(self, pilot: "NatsPilot", js_context: JetStreamContext) -> None:
         self._pilot = pilot
         self._nats_client = self._pilot._nats_client
         self._js: JetStreamContext = js_context
-        self._workers: list[asyncio.Task] = []
+        self._workers: Dict[str, list[asyncio.Task]] = {}
         self._nats_subscriptions: Dict[str, list[Subscription]] = {}
         self._shutdown_event = asyncio.Event()
 
@@ -153,7 +180,7 @@ class NatsPushPull(PushPull):
         js_context = pilot._nats_client.jetstream()
         return cls(pilot, js_context)
 
-    @lru_cache(maxsize=1000)
+    @lru_cache(maxsize=10)
     def stream_name(self, subject: str) -> str:
         return subject.upper().replace(".", "-")
 
@@ -169,6 +196,7 @@ class NatsPushPull(PushPull):
     def job_subject(self, subject: str) -> str:
         return f"{subject}.job"
 
+    @async_once
     async def _ensure_stream(self, subject: str) -> None:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
@@ -196,6 +224,7 @@ class NatsPushPull(PushPull):
         )
         logger.info(f"Created JetStream stream: {self.stream_name(subject)}")
 
+    @async_once
     async def _ensure_consumer(self, subject: str) -> None:
         if not self._pilot.is_connected():
             raise RuntimeError("NATS client not connected")
@@ -207,6 +236,18 @@ class NatsPushPull(PushPull):
             # Consumer doesn't exist, continue to create it
             pass
 
+        logger.info(f"📦 Creating JetStream consumer: {self.consumer_name(subject)}")
+        await self._js.add_consumer(
+            stream=self.stream_name(subject),
+            config=api.ConsumerConfig(
+                durable_name=self.consumer_name(subject),
+                ack_policy=api.AckPolicy.EXPLICIT,
+                deliver_policy=api.DeliverPolicy.ALL,
+                filter_subject=self.job_subject(subject),
+            )
+        )
+        logger.info(f"Created JetStream consumer: {self.consumer_name(subject)}")
+
     async def push(self, subject: str, job: Job) -> bool:
         """Push a job to the specified subject using JetStream."""
         try:
@@ -214,13 +255,15 @@ class NatsPushPull(PushPull):
             # Update job metadata
             job.recv_ms = int(time.time() * 1000)
             job.status = "new"
+            if not hasattr(job, "retry_count") or job.retry_count is None:
+                job.retry_count = 0
 
             # Publish job to JetStream
             payload = json.dumps(job.model_dump(by_alias=True)).encode()
             ack = await self._js.publish(self.job_subject(subject), payload)
 
             # Notify subscriptions
-            # await self._notify_subscriptions(subject, job)
+            await self._notify_subscriptions(subject, job)
 
             logger.info(f"Pushed job {job.id} to {self.job_subject(subject)}, sequence: {ack.seq}")
             return True
@@ -234,27 +277,35 @@ class NatsPushPull(PushPull):
     ) -> None:
         """Register workers for the specified subject using JetStream consumer."""
         try:
+            self._shutdown_event.clear()
             await self._ensure_stream(subject)
             await self._ensure_consumer(subject)
-            await self._js.pull_subscribe(
-                stream=self.stream_name(subject),
-                subject=self.job_subject(subject),
-                durable=self.consumer_name(subject),
-            )
+            if subject not in self._workers:
+                self._workers[subject] = []
             for _ in range(n_workers):
-                self._workers.append(asyncio.create_task(self._worker_loop(subject, callback)))
+                self._workers[subject].append(
+                    asyncio.create_task(self._worker_loop(subject, callback))
+                )
             logger.info(f"Registered {n_workers} workers for {subject}")
 
         except Exception as e:
             logger.error(f"Error registering workers for {subject}: {e}", exc_info=True)
             raise
 
+    async def unregister_worker(self, subject: str) -> None:
+        if subject in self._workers:
+            self._shutdown_event.set()
+            await asyncio.wait_for(
+                asyncio.gather(*self._workers[subject], return_exceptions=True), timeout=2.0
+            )
+            self._workers[subject].clear()
+            del self._workers[subject]
+        logger.info(f"Unregistered workers for {subject}")
+
     async def _worker_loop(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> None:
         try:
             await self._ensure_stream(subject)
-
             await self._ensure_consumer(subject)
-
             subscription = await self._js.pull_subscribe(
                 stream=self.stream_name(subject),
                 subject=self.job_subject(subject),
@@ -273,40 +324,49 @@ class NatsPushPull(PushPull):
                 if self._shutdown_event.is_set():
                     break
                 if fetch_task in done:
-                    try:
-                        messages = fetch_task.result()
-                    except TimeoutError:
-                        # This is expected when no messages are available
-                        continue
-                    except Exception as e:
-                        logger.error(f"Error fetching messages for {subject}: {e}", exc_info=True)
-                        continue
-                    for message in messages:
-                        job_data = json.loads(message.data.decode())
-                        job = Job(**job_data)
-                        try:
-                            job.start_ms = int(time.time() * 1000)
-                            job.status = "running"
-                            await self._notify_subscriptions(subject, job)
-                            await callback(job)
-                            job.end_ms = int(time.time() * 1000)
-                            job.status = "finished"
-                            await self._notify_subscriptions(subject, job)
-                        except asyncio.CancelledError:
-                            job.end_ms = int(time.time() * 1000)
-                            job.status = "cancelled"
-                            await self._notify_subscriptions(subject, job)
-                        except Exception as e:
-                            logger.error(f"Error in worker loop for {subject}: {e}", exc_info=True)
-                            job.end_ms = int(time.time() * 1000)
-                            job.status = "failed"
-                            await self._notify_subscriptions(subject, job)
-                        finally:
-                            await message.ack()
-                        # await self._notify_subscriptions(subject, job)
+                    await self._handle_fetched_messages(fetch_task, subject, callback)
         except Exception as e:
             logger.error(f"Error in worker loop for {subject}: {e}", exc_info=True)
             raise
+        finally:
+            await subscription.unsubscribe()
+
+    async def _handle_fetched_messages(self, fetch_task, subject, callback):
+        try:
+            messages = fetch_task.result()
+        except TimeoutError:
+            # This is expected when no messages are available
+            return
+        except Exception as e:
+            logger.error(f"Error fetching messages for {subject}: {e}", exc_info=True)
+            return
+        for message in messages:
+            await self._process_job_message(message, subject, callback)
+
+    async def _process_job_message(self, message, subject, callback):
+        job_data = json.loads(message.data.decode())
+        job = Job(**job_data)
+        if not hasattr(job, "retry_count") or job.retry_count is None:
+            job.retry_count = 0
+        try:
+            job.start_ms = int(time.time() * 1000)
+            job.status = "running"
+            await self._notify_subscriptions(subject, job)
+            await callback(job)
+            job.end_ms = int(time.time() * 1000)
+            job.status = "finished"
+            await self._notify_subscriptions(subject, job)
+        except asyncio.CancelledError:
+            job.end_ms = int(time.time() * 1000)
+            job.status = "cancelled"
+            await self._notify_subscriptions(subject, job)
+        except Exception as e:
+            logger.error(f"Error in worker loop for {subject}: {e}", exc_info=True)
+            job.end_ms = int(time.time() * 1000)
+            job.status = "failed"
+            await self._notify_subscriptions(subject, job)
+        finally:
+            await message.ack()
 
     async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
         """Subscribe to job notifications for the specified subject."""
@@ -315,7 +375,8 @@ class NatsPushPull(PushPull):
         async def nats_callback(msg: NatsMsg):
             try:
                 data = json.loads(msg.data.decode())
-                await callback(data)
+                job = Job(**data)
+                await callback(job)
             except Exception as e:
                 logger.error(
                     f"Error in NATS subscription callback for {msg.subject}: {e}", exc_info=True
@@ -360,12 +421,21 @@ class NatsPushPull(PushPull):
     async def _cleanup(self) -> None:
         """Clean up all resources."""
         self._shutdown_event.set()
-        await asyncio.wait_for(asyncio.gather(*self._workers, return_exceptions=True), timeout=10.0)
 
-        # Cancel all worker tasks if timeout is reached
-        for task in self._workers:
-            if not task.done():
-                task.cancel()
+        # Gather all worker tasks from all subjects
+        all_workers = []
+        for workers in self._workers.values():
+            all_workers.extend(workers)
+
+        if all_workers:
+            await asyncio.wait_for(
+                asyncio.gather(*all_workers, return_exceptions=True), timeout=10.0
+            )
+
+            # Cancel all worker tasks if timeout is reached
+            for task in all_workers:
+                if not task.done():
+                    task.cancel()
 
         # Clear all collections
         self._workers.clear()

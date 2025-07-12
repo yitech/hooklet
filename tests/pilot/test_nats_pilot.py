@@ -7,6 +7,7 @@ import warnings
 import unittest.mock
 from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
+import nats
 
 from hooklet.pilot.nats_pilot import NatsPilot, NatsPushPull
 from hooklet.base.types import Job, Msg, Req, Reply
@@ -21,8 +22,10 @@ def suppress_async_mock_warnings():
 async def test_nats_pilot_connection():
     """Test basic connection functionality"""
     pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
+                      connect_timeout=3,
                       allow_reconnect=False,
-                      connect_timeout=5)
+                      reconnect_time_wait=1,
+                      max_reconnect_attempts=1)
     
     # Test initial state
     assert not pilot.is_connected()
@@ -34,17 +37,20 @@ async def test_nats_pilot_connection():
         assert pilot.is_connected()
         await pilot.disconnect()
         assert not pilot.is_connected()
-    except Exception:
-        # If NATS server is not running, this is expected
+    except nats.errors.NoServersError:
         pytest.skip("NATS server not available")
+    except Exception as e:
+        raise e
 
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_nats_pilot_pubsub():
     """Test pub/sub functionality"""
     pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
+                      connect_timeout=3,
                       allow_reconnect=False,
-                      connect_timeout=5)
+                      reconnect_time_wait=1,
+                      max_reconnect_attempts=1)
     
     try:
         await pilot.connect()
@@ -72,21 +78,20 @@ async def test_nats_pilot_pubsub():
         
         await pilot.disconnect()
         
-    except Exception:
-        # Ensure proper cleanup of background tasks
-        try:
-            await pilot.disconnect()
-        except Exception:
-            pass
+    except nats.errors.NoServersError:
         pytest.skip("NATS server not available")
+    except Exception as e:
+        raise e
 
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_nats_pilot_reqreply():
     """Test request-reply functionality"""
     pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
+                      connect_timeout=3,
                       allow_reconnect=False,
-                      connect_timeout=5)
+                      reconnect_time_wait=1,
+                      max_reconnect_attempts=1)
     
     try:
         await pilot.connect()
@@ -118,21 +123,20 @@ async def test_nats_pilot_reqreply():
         
         await pilot.disconnect()
         
-    except Exception:
-        # Ensure proper cleanup of background tasks
-        try:
-            await pilot.disconnect()
-        except Exception:
-            pass
+    except nats.errors.NoServersError:
         pytest.skip("NATS server not available")
+    except Exception as e:
+        raise e
 
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_nats_pilot_pushpull():
     """Test push-pull functionality with JetStream"""
     pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
+                      connect_timeout=3,
                       allow_reconnect=False,
-                      connect_timeout=5)
+                      reconnect_time_wait=1,
+                      max_reconnect_attempts=1)
     
     try:
         await pilot.connect()
@@ -173,28 +177,28 @@ async def test_nats_pilot_pushpull():
         
         await pilot.disconnect()
         
-    except Exception:
-        # Ensure proper cleanup of background tasks
-        try:
-            await pilot.disconnect()
-        except Exception:
-            pass
+    except nats.errors.NoServersError:
         pytest.skip("NATS server not available")
+    except Exception as e:
+        raise e
 
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_nats_pilot_context_manager():
     """Test context manager functionality"""
     pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
+                      connect_timeout=3,
                       allow_reconnect=False,
-                      connect_timeout=5)
-    
+                      reconnect_time_wait=1,
+                      max_reconnect_attempts=1)
     try:
         async with pilot:
             assert pilot.is_connected()
         assert not pilot.is_connected()
-    except Exception:
+    except nats.errors.NoServersError:
         pytest.skip("NATS server not available")
+    except Exception as e:
+        raise e
 
 class TestNatsPilot:
     """Test cases for NatsPilot class."""
@@ -203,8 +207,10 @@ class TestNatsPilot:
     def pilot(self):
         """Create a fresh NatsPilot instance for each test."""
         return NatsPilot(nats_urls=["nats://localhost:4222"],
-                         allow_reconnect=False,
-                         connect_timeout=5)
+                         connect_timeout=3,
+                      allow_reconnect=False,
+                      reconnect_time_wait=1,
+                      max_reconnect_attempts=1)
 
     @pytest.fixture
     def sample_job(self):
@@ -241,13 +247,17 @@ class TestNatsPilot:
             # Create pilot after patching NATS
             pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
                               allow_reconnect=False,
-                              connect_timeout=5)
+                              connect_timeout=5,
+                              reconnect_time_wait=1,
+                              max_reconnect_attempts=1)
             
             await pilot.connect()
             assert pilot.is_connected()
             mock_nats_client.connect.assert_called_once_with(servers=["nats://localhost:4222"],
                                                             allow_reconnect=False,
-                                                            connect_timeout=5)
+                                                            connect_timeout=5,
+                                                            reconnect_time_wait=1,
+                                                            max_reconnect_attempts=1)
             
             await pilot.disconnect()
             assert not pilot.is_connected()
@@ -268,7 +278,9 @@ class TestNatsPilot:
 
             pilot = NatsPilot(nats_urls=["nats://localhost:4222"],
                               allow_reconnect=False,
-                              connect_timeout=5)
+                              connect_timeout=5,
+                              reconnect_time_wait=1,
+                              max_reconnect_attempts=1)
 
             async with pilot:
                 assert pilot.is_connected()
@@ -323,7 +335,7 @@ class TestNatsPushPull:
         assert pushpull._pilot == mock_pilot
         assert pushpull._js == mock_js_context
         assert pushpull._nats_client == mock_pilot._nats_client
-        assert pushpull._workers == []
+        assert pushpull._workers == {}
         assert pushpull._nats_subscriptions == {}
         assert pushpull._shutdown_event is not None
         assert not pushpull._shutdown_event.is_set()
@@ -690,7 +702,7 @@ class TestNatsPushPull:
         mock_sub2 = AsyncMock()
         
         # Set up initial state
-        pushpull._workers = [mock_task1, mock_task2]
+        pushpull._workers = {"test.subject": [mock_task1, mock_task2]}
         pushpull._nats_subscriptions = {
             "test.subject1.subscriber": [mock_sub1],
             "test.subject2.subscriber": [mock_sub2]
@@ -724,3 +736,29 @@ class TestNatsPushPull:
         # Verify collections remain empty
         assert len(pushpull._workers) == 0
         assert len(pushpull._nats_subscriptions) == 0 
+
+    @pytest.mark.asyncio
+    async def test_unregister_worker(self, mock_pilot, mock_js_context):
+        """Test unregister_worker removes and cancels all workers for a subject."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+
+        # Create dummy worker tasks
+        async def dummy_worker():
+            await asyncio.sleep(0.01)
+            return "done"
+        mock_task1 = asyncio.create_task(dummy_worker())
+        mock_task2 = asyncio.create_task(dummy_worker())
+        subject = "test.subject"
+        pushpull._workers[subject] = [mock_task1, mock_task2]
+
+        # Ensure tasks are running
+        assert all([not t.done() for t in pushpull._workers[subject]])
+
+        # Call unregister_worker
+        await pushpull.unregister_worker(subject)
+
+        # After unregister, the subject should be removed from _workers
+        assert subject not in pushpull._workers
+        # The tasks should be done (cancelled or finished)
+        assert all([t.done() for t in [mock_task1, mock_task2]]) 
+

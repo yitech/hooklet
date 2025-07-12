@@ -23,7 +23,7 @@ class Worker(Node, ABC):
         await self.pushpull.register_worker(self.name, self.on_job)
 
     async def on_close(self):
-        pass
+        await self.pushpull.unregister_worker(self.name)
 
 
 class Dispatcher:
