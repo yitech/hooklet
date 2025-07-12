@@ -277,6 +277,7 @@ class NatsPushPull(PushPull):
     ) -> None:
         """Register workers for the specified subject using JetStream consumer."""
         try:
+            self._shutdown_event.clear()
             await self._ensure_stream(subject)
             await self._ensure_consumer(subject)
             if subject not in self._workers:
