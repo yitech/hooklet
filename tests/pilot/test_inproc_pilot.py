@@ -448,6 +448,27 @@ class TestSimplePushPull:
         await spp._cleanup()
         assert spp._worker_loops == []
 
+    @pytest.mark.asyncio
+    async def test_unregister_worker(self):
+        """Test unregister_worker functionality."""
+        pilot = MockPilot()
+        spp = SimplePushPull('test', pilot)
+        
+        # Register workers
+        callback = AsyncMock()
+        await spp.register_worker(callback, 3)
+        
+        # Verify workers are registered
+        assert len(spp._worker_loops) == 3
+        assert not spp._shutdown_event.is_set()
+        
+        # Unregister workers
+        await spp.unregister_worker()
+        
+        # Verify workers are unregistered
+        assert len(spp._worker_loops) == 0
+        assert spp._shutdown_event.is_set()
+
 
 class TestInprocPushPull:
     @pytest.fixture
@@ -573,6 +594,34 @@ class TestInprocPushPull:
         """Test cleanup when no subjects exist."""
         assert len(inproc_pushpull._pushpulls) == 0
         await inproc_pushpull._cleanup()
+        assert len(inproc_pushpull._pushpulls) == 0
+
+    @pytest.mark.asyncio
+    async def test_unregister_worker_existing_subject(self, inproc_pushpull):
+        """Test unregister_worker on existing subject."""
+        subject = "test.subject"
+        callback = AsyncMock()
+        
+        # First register a worker to create the SimplePushPull
+        await inproc_pushpull.register_worker(subject, callback, 2)
+        
+        # Verify workers are registered
+        simple_pushpull = inproc_pushpull._pushpulls[subject]
+        assert len(simple_pushpull._worker_loops) == 2
+        
+        # Unregister the worker
+        await inproc_pushpull.unregister_worker(subject)
+        
+        # Verify workers are unregistered
+        assert len(simple_pushpull._worker_loops) == 0
+
+    @pytest.mark.asyncio
+    async def test_unregister_worker_nonexistent_subject(self, inproc_pushpull):
+        """Test unregister_worker on non-existent subject."""
+        # Should not raise an exception
+        await inproc_pushpull.unregister_worker("nonexistent.subject")
+        
+        # Should still have empty pushpulls
         assert len(inproc_pushpull._pushpulls) == 0
 
     @pytest.mark.asyncio
