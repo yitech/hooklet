@@ -7,6 +7,7 @@ import warnings
 import unittest.mock
 from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
+import nats
 
 from hooklet.pilot.nats_pilot import NatsPilot, NatsPushPull
 from hooklet.base.types import Job, Msg, Req, Reply
@@ -36,9 +37,10 @@ async def test_nats_pilot_connection():
         assert pilot.is_connected()
         await pilot.disconnect()
         assert not pilot.is_connected()
-    except Exception:
-        # If NATS server is not running, this is expected
+    except nats.errors.NoServersError:
         pytest.skip("NATS server not available")
+    except Exception as e:
+        raise e
 
 @pytest.mark.asyncio
 @pytest.mark.integration
@@ -76,13 +78,10 @@ async def test_nats_pilot_pubsub():
         
         await pilot.disconnect()
         
-    except Exception:
-        # Ensure proper cleanup of background tasks
-        try:
-            await pilot.disconnect()
-        except Exception:
-            pass
+    except nats.errors.NoServersError:
         pytest.skip("NATS server not available")
+    except Exception as e:
+        raise e
 
 @pytest.mark.asyncio
 @pytest.mark.integration
@@ -124,13 +123,10 @@ async def test_nats_pilot_reqreply():
         
         await pilot.disconnect()
         
-    except Exception:
-        # Ensure proper cleanup of background tasks
-        try:
-            await pilot.disconnect()
-        except Exception:
-            pass
+    except nats.errors.NoServersError:
         pytest.skip("NATS server not available")
+    except Exception as e:
+        raise e
 
 @pytest.mark.asyncio
 @pytest.mark.integration
@@ -181,13 +177,10 @@ async def test_nats_pilot_pushpull():
         
         await pilot.disconnect()
         
-    except Exception:
-        # Ensure proper cleanup of background tasks
-        try:
-            await pilot.disconnect()
-        except Exception:
-            pass
+    except nats.errors.NoServersError:
         pytest.skip("NATS server not available")
+    except Exception as e:
+        raise e
 
 @pytest.mark.asyncio
 @pytest.mark.integration
@@ -202,8 +195,10 @@ async def test_nats_pilot_context_manager():
         async with pilot:
             assert pilot.is_connected()
         assert not pilot.is_connected()
-    except Exception:
+    except nats.errors.NoServersError:
         pytest.skip("NATS server not available")
+    except Exception as e:
+        raise e
 
 class TestNatsPilot:
     """Test cases for NatsPilot class."""

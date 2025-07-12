@@ -7,7 +7,7 @@ from typing import Any, Awaitable, Callable, Dict
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg as NatsMsg
 from nats.aio.subscription import Subscription
-from nats.js import JetStreamContext
+from nats.js import JetStreamContext, api
 
 from hooklet.base import Job, Msg, Pilot, PubSub, PushPull, Reply, Req, ReqReply
 from hooklet.logger import get_logger
@@ -239,10 +239,12 @@ class NatsPushPull(PushPull):
         logger.info(f"📦 Creating JetStream consumer: {self.consumer_name(subject)}")
         await self._js.add_consumer(
             stream=self.stream_name(subject),
-            durable=self.consumer_name(subject),
-            ack_policy="explicit",
-            deliver_policy="all",
-            filter_subject=self.job_subject(subject),
+            config=api.ConsumerConfig(
+                durable_name=self.consumer_name(subject),
+                ack_policy=api.AckPolicy.EXPLICIT,
+                deliver_policy=api.DeliverPolicy.ALL,
+                filter_subject=self.job_subject(subject),
+            )
         )
         logger.info(f"Created JetStream consumer: {self.consumer_name(subject)}")
 
