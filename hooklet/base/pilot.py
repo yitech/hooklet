@@ -82,7 +82,6 @@ class PushPull(ABC):
         """
         raise NotImplementedError("Subclasses must implement unregister_worker()")
 
-
     @abstractmethod
     async def subscribe(self, subject: str, callback: Callable[[Job], Awaitable[Any]]) -> int:
         """
