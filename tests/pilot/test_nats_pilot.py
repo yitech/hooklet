@@ -323,7 +323,7 @@ class TestNatsPushPull:
         assert pushpull._pilot == mock_pilot
         assert pushpull._js == mock_js_context
         assert pushpull._nats_client == mock_pilot._nats_client
-        assert pushpull._workers == []
+        assert pushpull._workers == {}
         assert pushpull._nats_subscriptions == {}
         assert pushpull._shutdown_event is not None
         assert not pushpull._shutdown_event.is_set()
@@ -690,7 +690,7 @@ class TestNatsPushPull:
         mock_sub2 = AsyncMock()
         
         # Set up initial state
-        pushpull._workers = [mock_task1, mock_task2]
+        pushpull._workers = {"test.subject": [mock_task1, mock_task2]}
         pushpull._nats_subscriptions = {
             "test.subject1.subscriber": [mock_sub1],
             "test.subject2.subscriber": [mock_sub2]
@@ -724,3 +724,28 @@ class TestNatsPushPull:
         # Verify collections remain empty
         assert len(pushpull._workers) == 0
         assert len(pushpull._nats_subscriptions) == 0 
+
+    @pytest.mark.asyncio
+    async def test_unregister_worker(self, mock_pilot, mock_js_context):
+        """Test unregister_worker removes and cancels all workers for a subject."""
+        pushpull = NatsPushPull(mock_pilot, mock_js_context)
+
+        # Create dummy worker tasks
+        async def dummy_worker():
+            await asyncio.sleep(0.01)
+            return "done"
+        mock_task1 = asyncio.create_task(dummy_worker())
+        mock_task2 = asyncio.create_task(dummy_worker())
+        subject = "test.subject"
+        pushpull._workers[subject] = [mock_task1, mock_task2]
+
+        # Ensure tasks are running
+        assert all([not t.done() for t in pushpull._workers[subject]])
+
+        # Call unregister_worker
+        await pushpull.unregister_worker(subject)
+
+        # After unregister, the subject should be removed from _workers
+        assert subject not in pushpull._workers
+        # The tasks should be done (cancelled or finished)
+        assert all([t.done() for t in [mock_task1, mock_task2]]) 
